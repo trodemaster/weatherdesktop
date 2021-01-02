@@ -1,0 +1,86 @@
+#!/usr/bin/env bash
+set -euo pipefail
+IFS=$'\n\t'
+shopt -s nullglob nocaseglob
+
+# kill all child proceses
+kill_spawn() {
+  for SPAWN in $(pgrep -g $$); do
+    kill $SPAWN
+  done
+}
+
+# kill_spawn on exit and ctrl-c
+trap kill_spawn EXIT SIGINT
+
+trap 'catch' ERR
+catch() {
+  echo "An error has occurred but we're going to eat it!!"
+}
+
+# Define global variables and set defaults
+CHROME="/Applications/Google Chrome.app/Contents/MacOS/Google Chrome"
+SCRAPE=1
+INSTALL_MACPORTS=1
+PORTLIST_MACPORTS=1
+UPGRADE_PORTS=1
+
+# print out usage
+usage() {
+  cat <<EOF
+USAGE: ./wd -s 
+OPTIONS:
+   -s    Scrape Sites
+   -i    Install macports and ports tree from git
+   -p    Install ports from file list
+   -u    Upgrade installed ports
+   -h    Help
+EOF
+  exit 0
+}
+
+# process options and arguments
+while getopts "hsipu" OPTION; do
+  case $OPTION in
+  h) usage ;;
+  s) SCRAPE=0 ;;
+  i) INSTALL_MACPORTS=0 ;;
+  p) PORTLIST_MACPORTS=0 ;;
+  u) UPGRADE_PORTS=0 ;;
+  esac
+done
+
+scrape() {
+  set +e
+  OUTPUT_FILE="$1"
+  WINDOW_SIZE="$2"
+  TARGET_URL="$3"
+
+  # create temp dir if it doesn't exist
+  if ! [[ -d ${TMPDIR}wd ]]; then
+    mkdir ${TMPDIR}wd
+  fi
+
+  # retry with counter
+  RETRY_COUNTER=0
+  until [ "$RETRY_COUNTER" -ge 5 ]; do
+    echo "scraping $OUTPUT_FILE"
+    timeout 15s "$CHROME" --headless --run-all-compositor-stages-before-draw --virtual-time-budget=10000 -disk-cache-dir=${TMPDIR}wd --user-data-dir=${TMPDIR}wd --crash-dumps-dir=${TMPDIR}wd --screenshot="$OUTPUT_FILE" --window-size="$WINDOW_SIZE" "$TARGET_URL" && break
+    RETRY_COUNTER=$((RETRY_COUNTER + 1))
+  done
+}
+
+# do the scrape
+if [[ $SCRAPE == 0 ]]; then
+  scrape "assets/weather_gov_extended.jpg" "1400,1200" "https://forecast.weather.gov/MapClick.php?lat=47.7456&lon=-121.0892" &
+  scrape "assets/nwac_stevens_weather.jpg" "900,1600" "https://nwac.us/data-portal/graph/21/" &
+  scrape "assets/noaa_obs_stevens.jpg" "900,1800" "https://www.wrh.noaa.gov/mesowest/getobext.php?wfo=sew&sid=SVNW1" &
+  scrape "assets/nwac_avalanch.jpg" "900,2800" "https://nwac.us/avalanche-forecast/#/stevens-pass" &
+  scrape "assets/nwac_overview.jpg" "800,1200" "https://nwac.us/" &
+  scrape "assets/weather_gov_extended.jpg" "1400,1200" "https://forecast.weather.gov/MapClick.php?lat=47.7456&lon=-121.0892" &
+  scrape "assets/weather_gov_hourly.jpg" "1000,1800" "https://forecast.weather.gov/MapClick.php?lat=47.7456&lon=-121.0892&unit=0&lg=english&FcstType=graphical" &
+  wait
+fi
+
+echo "End of Line..."
+exit 0

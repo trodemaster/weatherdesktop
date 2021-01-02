@@ -21,7 +21,7 @@ catch() {
 # Define global variables and set defaults
 CHROME="/Applications/Google Chrome.app/Contents/MacOS/Google Chrome"
 SCRAPE=1
-INSTALL_MACPORTS=1
+DOWNLOAD=1
 PORTLIST_MACPORTS=1
 UPGRADE_PORTS=1
 
@@ -31,7 +31,7 @@ usage() {
 USAGE: ./wd -s 
 OPTIONS:
    -s    Scrape Sites
-   -i    Install macports and ports tree from git
+   -d    Download Images
    -p    Install ports from file list
    -u    Upgrade installed ports
    -h    Help
@@ -40,11 +40,11 @@ EOF
 }
 
 # process options and arguments
-while getopts "hsipu" OPTION; do
+while getopts "hsdpu" OPTION; do
   case $OPTION in
   h) usage ;;
   s) SCRAPE=0 ;;
-  i) INSTALL_MACPORTS=0 ;;
+  d) DOWNLOAD=0 ;;
   p) PORTLIST_MACPORTS=0 ;;
   u) UPGRADE_PORTS=0 ;;
   esac
@@ -79,8 +79,45 @@ if [[ $SCRAPE == 0 ]]; then
   scrape "assets/nwac_overview.jpg" "800,1200" "https://nwac.us/" &
   scrape "assets/weather_gov_extended.jpg" "1400,1200" "https://forecast.weather.gov/MapClick.php?lat=47.7456&lon=-121.0892" &
   scrape "assets/weather_gov_hourly.jpg" "1000,1800" "https://forecast.weather.gov/MapClick.php?lat=47.7456&lon=-121.0892&unit=0&lg=english&FcstType=graphical" &
-  wait
 fi
+
+download() {
+  set +e
+  OUTPUT_FILE="$1"
+  TARGET_URL="$2"
+  # retry with counter
+  RETRY_COUNTER=0
+  until [ "$RETRY_COUNTER" -ge 5 ]; do
+    echo "Downloading $OUTPUT_FILE"
+    wget --quiet "$TARGET_URL" -O "$OUTPUT_FILE" && break
+    sleep 5
+    RETRY_COUNTER=$((RETRY_COUNTER + 1))
+  done
+}
+
+# do the download
+if [[ $DOWNLOAD == 0 ]]; then
+  download "assets/wsdot_stevens_pass.jpg" "https://images.wsdot.wa.gov/nc/002vc06430.jpg" &
+  download "assets/wsdot_us2_skykomish.jpg" "https://images.wsdot.wa.gov/nw/002vc04558.jpg" &
+  download "assets/wsdot_mill_creek.jpg" "https://images.wsdot.wa.gov/nc/002vc07057.jpg" &
+  download "assets/wsdot_e_stevens_summit.jpg" "https://images.wsdot.wa.gov/nc/002vc06458.jpg" &
+  download "assets/wsdot_big_windy.jpg" "https://images.wsdot.wa.gov/nc/002vc06300.jpg" &
+  download "assets/wsdot_w_stevens.jpg" "https://images.wsdot.wa.gov/nc/002vc06190.jpg" &
+  download "assets/GOES17_west.jpg" "https://cdn.star.nesdis.noaa.gov/GOES17/ABI/CONUS/GEOCOLOR/latest.jpg" &
+  download "assets/GOES17_disc.jpg" "https://cdn.star.nesdis.noaa.gov/GOES17/ABI/FD/GEOCOLOR/latest.jpg" &
+  download "assets/GOES17_north_pacific.jpg" "https://cdn.star.nesdis.noaa.gov/GOES17/ABI/SECTOR/np/GEOCOLOR/latest.jpg" &
+  download "assets/stevens_cowboy_mountain.jpg" "http://common.snow.com/mtncams/Cowboy%20Mountain.jpg" &
+  download "assets/stevens_skyline.jpg" "http://common.snow.com/mtncams/Skyline.jpg" &
+  download "assets/stevens_glacier_peak.jpg" "http://common.snow.com/mtncams/Glacier%20Peak.jpg" &
+  download "assets/stevens_gemini.jpg" "http://common.snow.com/mtncams/Gemini.jpg" &
+  download "assets/stevens_tye_mill_top_terminal.jpg" "http://common.snow.com/mtncams/Tye%20Mill%20Top%20Terminal.jpg" &
+  download "assets/stevens_south_divide.jpg" "http://common.snow.com/mtncams/South%20Divide.jpg" &
+  download "assets/stevens_spbasearea.jpg" "http://common.snow.com/mtncams/SPBaseArea.jpg" &
+fi
+
+# wait for asset collection to complete
+wait
+echo "Asset Collection Completed..."
 
 echo "End of Line..."
 exit 0

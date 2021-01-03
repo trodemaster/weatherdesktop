@@ -117,7 +117,7 @@ wait
 echo "Asset Collection Completed..."
 
 # crop and resize
-convert assets/GOES17_north_pacific.jpg -resize "3840>" -crop 3840x2160+0+0 assets/background0.jpg
+convert assets/GOES17_north_pacific.jpg -crop 7200x4050+0+0 -resize "3840>" assets/background0.jpg
 convert assets/nwac_stevens_weather.jpg -crop 1450x2250+100+400 -resize "750>" assets/nwac_stevens_weather_s.jpg
 
 

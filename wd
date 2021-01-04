@@ -23,7 +23,7 @@ CHROME="/Applications/Google Chrome.app/Contents/MacOS/Google Chrome"
 SCRAPE=1
 DOWNLOAD=1
 CROP=1
-UPGRADE_PORTS=1
+RENDER=1
 
 # print out usage
 usage() {
@@ -32,21 +32,21 @@ USAGE: ./wd -s
 OPTIONS:
    -s    Scrape Sites
    -d    Download Images
-   -p    Install ports from file list
-   -u    Upgrade installed ports
+   -c    Crop Images
+   -r    Render Image
    -h    Help
 EOF
   exit 0
 }
 
 # process options and arguments
-while getopts "hsdcu" OPTION; do
+while getopts "hsdcr" OPTION; do
   case $OPTION in
   h) usage ;;
   s) SCRAPE=0 ;;
   d) DOWNLOAD=0 ;;
   c) CROP=0 ;;
-  u) UPGRADE_PORTS=0 ;;
+  r) RENDER=0 ;;
   esac
 done
 
@@ -117,18 +117,47 @@ wait
 echo "Asset Collection Completed..."
 
 # crop and resize
-convert assets/GOES17_north_pacific.jpg -crop 7200x4050+0+0 -resize "3840>" assets/background0.jpg
-convert assets/nwac_stevens_weather.jpg -crop 1450x2250+100+400 -resize "750>" assets/nwac_stevens_weather_s.jpg
+if [[ $CROP == 0 ]]; then
+  convert assets/GOES17_north_pacific.jpg -crop 7200x4050+0+0 -resize "3840>" assets/background_s.jpg &
+  convert assets/nwac_stevens_weather.jpg -crop 1450x2250+100+400 -resize "750>" assets/nwac_stevens_weather_s.jpg &
+  convert assets/nwac_avalanch.jpg -crop 1325x2700+200+1800 -resize "30%" assets/nwac_avalanch_s.jpg &
+  convert assets/weather_gov_hourly.jpg -crop 1690x1800+150+800 -resize "50%" assets/weather_gov_hourly_s.jpg &
+  convert assets/weather_gov_extended.jpg -crop 2300x550+250+1400 -resize "50%" assets/weather_gov_extended_s.jpg &
+  convert assets/stevens_cowboy_mountain.jpg -crop 1920x1080+0+0 -resize "50%" assets/stevens_cowboy_mountain_s.jpg &
+  convert assets/stevens_skyline.jpg -crop 1920x1080+0+0 -resize "30%" assets/stevens_skyline_s.jpg &
+  convert assets/stevens_glacier_peak.jpg -crop 1920x1080+0+0 -resize "30%" assets/stevens_glacier_peak_s.jpg &
+  convert assets/stevens_gemini.jpg -crop 1920x1080+0+0 -resize "30%" assets/stevens_gemini_s.jpg &
+  convert assets/stevens_south_divide.jpg -crop 1920x1080+0+0 -resize "50%" assets/stevens_south_divide_s.jpg &
+  convert assets/stevens_spbasearea.jpg -crop 1920x1080+0+0 -resize "30%" assets/stevens_spbasearea_s.jpg &
 
-
-convert assets/nwac_stevens_weather.jpg -gravity north -chop 0x400 assets/nwac_stevens_weather0.jpg
-convert assets/nwac_stevens_weather0.jpg -gravity south -chop 0x550 assets/nwac_stevens_weather1.jpg
-convert assets/nwac_stevens_weather1.jpg -gravity west -chop 100x0 assets/nwac_stevens_weather2.jpg
-convert assets/nwac_stevens_weather2.jpg -gravity east -chop 250x0 assets/nwac_stevens_weather3.jpg
-convert assets/nwac_stevens_weather3.jpg -resize "750>" -gravity center assets/nwac_stevens_weather.jpg
+  wait
+  echo "Croping completed..."
+fi
 
 # composit the image
-
+if [[ $RENDER == 0 ]]; then
+  RENDERED_FILENAME=hud-$(date "+%y%m%d-%H%M").jpg
+  convert -size 3840x2160 xc:skyblue \
+    assets/background_s.jpg -geometry +0+0 -composite \
+    assets/nwac_stevens_weather_s.jpg -geometry +50+50 -composite \
+    assets/wsdot_us2_skykomish.jpg -geometry +825+50 -composite \
+    assets/wsdot_w_stevens.jpg -geometry +1175+50 -composite \
+    assets/wsdot_big_windy.jpg -geometry +1526+50 -composite \
+    assets/wsdot_stevens_pass.jpg -geometry +1875+50 -composite \
+    assets/wsdot_e_stevens_summit.jpg -geometry +2226+50 -composite \
+    assets/wsdot_mill_creek.jpg -geometry +2586+50 -composite \
+    assets/stevens_cowboy_mountain_s.jpg -geometry +910+900 -composite \
+    assets/stevens_skyline_s.jpg -geometry +1504+1780 -composite \
+    assets/stevens_glacier_peak_s.jpg -geometry +2115+1780 -composite \
+    assets/stevens_gemini_s.jpg -geometry +2725+1780 -composite \
+    assets/stevens_south_divide_s.jpg -geometry +840+330 -composite \
+    assets/stevens_spbasearea_s.jpg -geometry +910+1780 -composite \
+    assets/nwac_avalanch_s.jpg -geometry +3250+50 -composite \
+    assets/weather_gov_hourly_s.jpg -geometry +50+1230 -composite \
+    assets/weather_gov_extended_s.jpg -geometry +920+1476 -composite \
+    rendered/$RENDERED_FILENAME
+  echo "Rendering Completed..."
+fi
 
 echo "End of Line..."
 exit 0

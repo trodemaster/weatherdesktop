@@ -26,7 +26,13 @@ FLUSH=1
 # print out usage
 usage() {
   cat <<EOF
-USAGE: ./wd -s 
+USAGE: wd
+
+Running wd without options will collect all assets,
+render and set the desktop image to the output.
+
+Individual options provided for debugging specific functions.
+
 OPTIONS:
    -s    Scrape Sites
    -d    Download Images
@@ -137,14 +143,13 @@ if [[ $CROP == 0 ]]; then
   convert assets/nwac_stevens_weather.jpg -crop 1450x2250+100+400 -resize "750>" assets/nwac_stevens_weather_s.jpg &
   convert assets/nwac_avalanch.jpg -crop 1325x2700+200+1800 -resize "30%" assets/nwac_avalanch_s.jpg &
   convert assets/weather_gov_hourly.jpg -crop 1690x1800+150+800 -resize "50%" assets/weather_gov_hourly_s.jpg &
-  convert assets/weather_gov_extended.jpg -crop 2300x550+250+1400 -resize "50%" assets/weather_gov_extended_s.jpg &
+  convert assets/weather_gov_extended.jpg -crop 2300x550+250+1200 -resize "50%" assets/weather_gov_extended_s.jpg &
   convert assets/stevens_cowboy_mountain.jpg -crop 1920x1080+0+0 -resize "50%" assets/stevens_cowboy_mountain_s.jpg &
   convert assets/stevens_skyline.jpg -crop 1920x1080+0+0 -resize "30%" assets/stevens_skyline_s.jpg &
   convert assets/stevens_glacier_peak.jpg -crop 1920x1080+0+0 -resize "30%" assets/stevens_glacier_peak_s.jpg &
   convert assets/stevens_gemini.jpg -crop 1920x1080+0+0 -resize "30%" assets/stevens_gemini_s.jpg &
   convert assets/stevens_south_divide.jpg -crop 1920x1080+0+0 -resize "50%" assets/stevens_south_divide_s.jpg &
   convert assets/stevens_spbasearea.jpg -crop 1920x1080+0+0 -resize "30%" assets/stevens_spbasearea_s.jpg &
-
   wait
   echo "Croping completed..."
 fi

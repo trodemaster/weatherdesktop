@@ -57,6 +57,11 @@ while getopts "hsdcrpf" OPTION; do
   esac
 done
 
+# ugly set the default action with no arguments are passed
+if [[ $SCRAPE == 1 ]] && [[ $DOWNLOAD == 1 ]] && [[ $CROP == 1 ]] && [[ $RENDER == 1 ]] && [[ $DESKTOP == 1 ]] && [[ $FLUSH == 1 ]]; then
+  SCRAPE=0 DOWNLOAD=0 CROP=0 RENDER=0 DESKTOP=0 FLUSH=0
+fi
+
 # flush assets
 if [[ $FLUSH == 0 ]]; then
   rm assets/*.jpg

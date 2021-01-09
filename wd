@@ -13,11 +13,6 @@ kill_spawn() {
 # kill_spawn on exit and ctrl-c
 trap kill_spawn EXIT SIGINT
 
-trap 'catch' ERR
-catch() {
-  echo "An error has occurred but we're going to eat it!!"
-}
-
 # Define global variables and set defaults
 CHROME="/Applications/Google Chrome.app/Contents/MacOS/Google Chrome"
 RENDERED_FILENAME=hud-$(date "+%y%m%d-%H%M").jpg

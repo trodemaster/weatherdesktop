@@ -20,10 +20,13 @@ catch() {
 
 # Define global variables and set defaults
 CHROME="/Applications/Google Chrome.app/Contents/MacOS/Google Chrome"
+RENDERED_FILENAME=hud-$(date "+%y%m%d-%H%M").jpg
 SCRAPE=1
 DOWNLOAD=1
 CROP=1
 RENDER=1
+DESKTOP=1
+FLUSH=1
 
 # print out usage
 usage() {
@@ -34,22 +37,32 @@ OPTIONS:
    -d    Download Images
    -c    Crop Images
    -r    Render Image
+   -p    Set Desktop
+   -f    Flush assets
    -h    Help
 EOF
   exit 0
 }
 
 # process options and arguments
-while getopts "hsdcr" OPTION; do
+while getopts "hsdcrpf" OPTION; do
   case $OPTION in
   h) usage ;;
   s) SCRAPE=0 ;;
   d) DOWNLOAD=0 ;;
   c) CROP=0 ;;
   r) RENDER=0 ;;
+  p) DESKTOP=0 ;;
+  f) FLUSH=0 ;;
   esac
 done
 
+# flush assets
+if [[ $FLUSH == 0 ]]; then
+  rm assets/*.jpg
+fi
+
+# scrape function
 scrape() {
   set +e
   OUTPUT_FILE="$1"
@@ -113,8 +126,10 @@ if [[ $DOWNLOAD == 0 ]]; then
 fi
 
 # wait for asset collection to complete
-wait
-echo "Asset Collection Completed..."
+if [[ $DOWNLOAD == 0 ]] || [[ $SCRAPE == 0 ]]; then
+  wait
+  echo "Asset Collection Completed..."
+fi
 
 # crop and resize
 if [[ $CROP == 0 ]]; then
@@ -136,7 +151,6 @@ fi
 
 # composit the image
 if [[ $RENDER == 0 ]]; then
-  RENDERED_FILENAME=hud-$(date "+%y%m%d-%H%M").jpg
   convert -size 3840x2160 xc:skyblue \
     assets/background_s.jpg -geometry +0+0 -composite \
     assets/nwac_stevens_weather_s.jpg -geometry +50+50 -composite \
@@ -157,6 +171,17 @@ if [[ $RENDER == 0 ]]; then
     assets/weather_gov_extended_s.jpg -geometry +920+1476 -composite \
     rendered/$RENDERED_FILENAME
   echo "Rendering Completed..."
+fi
+
+# set the desktop pattern
+if [[ $DESKTOP == 0 ]]; then
+  if [[ -f rendered/$RENDERED_FILENAME ]]; then
+    echo "setting desktop to rendered/$RENDERED_FILENAME"
+    desktoppr 0 rendered/$RENDERED_FILENAME
+  else
+    echo "Rendered file rendered/$RENDERED_FILENAME not found..."
+    echo "Run with render and set desktop at the same time"
+  fi
 fi
 
 echo "End of Line..."

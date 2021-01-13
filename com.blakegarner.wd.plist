@@ -3,7 +3,7 @@
 <plist version="1.0">
 <dict>
     <key>Label</key>
-    <string>com.blakegarner.hud</string>
+    <string>com.blakegarner.wd</string>
     <key>ProgramArguments</key>
     <array>
     <string>/Users/blake/code/weatherdesktop/wd</string>
@@ -13,14 +13,14 @@
     <key>EnvironmentVariables</key>
     <dict>
         <key>PATH</key>
-        <string>/usr/bin:/opt/local/bin:/usr/local/bin:/usr/bin:/bin:/usr/sbin:/sbin</string>
+        <string>/opt/local/libexec/gnubin:/opt/local/bin:/opt/local/sbin:/usr/local/bin:/usr/local/bin:/usr/bin:/bin:/usr/sbin:/sbin</string>
     </dict>
     <key>StartInterval</key>
     <integer>900</integer>
     <key>StandardOutPath</key>
-    <string>/Users/blake/Library/Logs/com.blakegarner.hud.log</string>
+    <string>/Users/blake/Library/Logs/com.blakegarner.wd.log</string>
     <key>StandardErrorPath</key>
-    <string>/Users/blake/Library/Logs/com.blakegarner.hud.log</string>
+    <string>/Users/blake/Library/Logs/com.blakegarner.wd.log</string>
     <key>UserName</key>
     <string>blake</string>
     <key>GroupName</key>

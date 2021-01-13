@@ -16,6 +16,7 @@ trap kill_spawn EXIT SIGINT
 # Define global variables and set defaults
 CHROME="/Applications/Google Chrome.app/Contents/MacOS/Google Chrome"
 RENDERED_FILENAME=hud-$(date "+%y%m%d-%H%M").jpg
+echo "starting generation of $RENDERED_FILENAME"
 SCRAPE=1
 DOWNLOAD=1
 CROP=1
@@ -143,7 +144,7 @@ if [[ $CROP == 0 ]]; then
   convert assets/nwac_stevens_weather.jpg -crop 1450x2250+100+400 -resize "750>" assets/nwac_stevens_weather_s.jpg &
   convert assets/nwac_avalanch.jpg -crop 1325x2700+200+1800 -resize "30%" assets/nwac_avalanch_s.jpg &
   convert assets/weather_gov_hourly.jpg -crop 1690x1800+150+800 -resize "50%" assets/weather_gov_hourly_s.jpg &
-  convert assets/weather_gov_extended.jpg -crop 2300x550+250+1200 -resize "50%" assets/weather_gov_extended_s.jpg &
+  convert assets/weather_gov_extended.jpg -crop 2300x550+250+1400 -resize "50%" assets/weather_gov_extended_s.jpg &
   convert assets/stevens_cowboy_mountain.jpg -crop 1920x1080+0+0 -resize "50%" assets/stevens_cowboy_mountain_s.jpg &
   convert assets/stevens_skyline.jpg -crop 1920x1080+0+0 -resize "30%" assets/stevens_skyline_s.jpg &
   convert assets/stevens_glacier_peak.jpg -crop 1920x1080+0+0 -resize "30%" assets/stevens_glacier_peak_s.jpg &

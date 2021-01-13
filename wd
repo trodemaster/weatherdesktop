@@ -23,6 +23,7 @@ CROP=1
 RENDER=1
 DESKTOP=1
 FLUSH=1
+WX_WARN=1
 
 # print out usage
 usage() {
@@ -140,11 +141,14 @@ fi
 
 # crop and resize
 if [[ $CROP == 0 ]]; then
+  # adjust extended weather crop based on warnings in place
+  ( TOP_CROP="1200"
+    curl -s "https://forecast.weather.gov/MapClick.php?lat=47.7456&lon=-121.0892&unit=0&lg=english&FcstType=text&TextType=0" | grep 'class="warn"' > /dev/null 2>&1 && TOP_CROP=1450
+  convert assets/weather_gov_extended.jpg -crop 2300x550+250+$TOP_CROP -resize "50%" assets/weather_gov_extended_s.jpg) &
   convert assets/GOES17_north_pacific.jpg -crop 7200x4050+0+0 -resize "3840>" assets/background_s.jpg &
   convert assets/nwac_stevens_weather.jpg -crop 1450x2250+100+400 -resize "750>" assets/nwac_stevens_weather_s.jpg &
   convert assets/nwac_avalanch.jpg -crop 1325x2700+200+1800 -resize "30%" assets/nwac_avalanch_s.jpg &
   convert assets/weather_gov_hourly.jpg -crop 1690x1800+150+800 -resize "50%" assets/weather_gov_hourly_s.jpg &
-  convert assets/weather_gov_extended.jpg -crop 2300x550+250+1400 -resize "50%" assets/weather_gov_extended_s.jpg &
   convert assets/stevens_cowboy_mountain.jpg -crop 1920x1080+0+0 -resize "50%" assets/stevens_cowboy_mountain_s.jpg &
   convert assets/stevens_skyline.jpg -crop 1920x1080+0+0 -resize "30%" assets/stevens_skyline_s.jpg &
   convert assets/stevens_glacier_peak.jpg -crop 1920x1080+0+0 -resize "30%" assets/stevens_glacier_peak_s.jpg &

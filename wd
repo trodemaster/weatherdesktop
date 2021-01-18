@@ -65,9 +65,13 @@ if [[ $SCRAPE == 1 ]] && [[ $DOWNLOAD == 1 ]] && [[ $CROP == 1 ]] && [[ $RENDER 
   SCRAPE=0 DOWNLOAD=0 CROP=0 RENDER=0 DESKTOP=0 FLUSH=0
 fi
 
+# path to this sripts repo root
+SCRIPT_DIR="$( cd "$( dirname "${BASH_SOURCE[0]}" )" >/dev/null 2>&1 && pwd )"
+echo $SCRIPT_DIR
+
 # flush assets
-if [[ $FLUSH == 0 ]]; then
-  rm assets/*.jpg
+if [[ $FLUSH == 0 ]] && [[ -e "$SCRIPT_DIR/assets/*.jpg" ]]; then
+  rm "$SCRIPT_DIR/assets/*.jpg"
 fi
 
 # scrape function
@@ -86,20 +90,19 @@ scrape() {
   RETRY_COUNTER=0
   until [ "$RETRY_COUNTER" -ge 5 ]; do
     echo "scraping $OUTPUT_FILE"
-    timeout 15s "$CHROME" --headless --run-all-compositor-stages-before-draw --virtual-time-budget=10000 -disk-cache-dir=${TMPDIR}wd --user-data-dir=${TMPDIR}wd --crash-dumps-dir=${TMPDIR}wd --screenshot="$OUTPUT_FILE" --window-size="$WINDOW_SIZE" "$TARGET_URL" && break
+    timeout 15s "$CHROME" --headless --disable-gpu --run-all-compositor-stages-before-draw --virtual-time-budget=10000 --window-size=2000x5000*4 -disk-cache-dir=${TMPDIR}wd --user-data-dir=${TMPDIR}wd --crash-dumps-dir=${TMPDIR}wd --screenshot="$OUTPUT_FILE" --window-size="$WINDOW_SIZE" "$TARGET_URL" && break
     RETRY_COUNTER=$((RETRY_COUNTER + 1))
   done
 }
 
 # do the scrape
 if [[ $SCRAPE == 0 ]]; then
-  scrape "assets/weather_gov_extended.jpg" "1400,1200" "https://forecast.weather.gov/MapClick.php?lat=47.7456&lon=-121.0892" &
-  scrape "assets/nwac_stevens_weather.jpg" "900,1600" "https://nwac.us/data-portal/graph/21/" &
-  scrape "assets/noaa_obs_stevens.jpg" "900,1800" "https://www.wrh.noaa.gov/mesowest/getobext.php?wfo=sew&sid=SVNW1" &
-  scrape "assets/nwac_avalanch.jpg" "900,2800" "https://nwac.us/avalanche-forecast/#/stevens-pass" &
-  scrape "assets/nwac_overview.jpg" "800,1200" "https://nwac.us/" &
-  scrape "assets/weather_gov_extended.jpg" "1400,1200" "https://forecast.weather.gov/MapClick.php?lat=47.7456&lon=-121.0892" &
-  scrape "assets/weather_gov_hourly.jpg" "1000,1800" "https://forecast.weather.gov/MapClick.php?lat=47.7456&lon=-121.0892&unit=0&lg=english&FcstType=graphical" &
+  scrape "$SCRIPT_DIR/assets/weather_gov_extended.jpg" "1400,1200" "https://forecast.weather.gov/MapClick.php?lat=47.7456&lon=-121.0892" &
+  scrape "$SCRIPT_DIR/assets/nwac_stevens_weather.jpg" "900,1600" "https://nwac.us/data-portal/graph/21/" &
+  scrape "$SCRIPT_DIR/assets/nwac_avalanch.jpg" "900,2800" "https://nwac.us/avalanche-forecast/#/stevens-pass" &
+  scrape "$SCRIPT_DIR/assets/nwac_overview.jpg" "800,1200" "https://nwac.us/" &
+  scrape "$SCRIPT_DIR/assets/weather_gov_extended.jpg" "1400,1200" "https://forecast.weather.gov/MapClick.php?lat=47.7456&lon=-121.0892" &
+  scrape "$SCRIPT_DIR/assets/weather_gov_hourly.jpg" "1000,1800" "https://forecast.weather.gov/MapClick.php?lat=47.7456&lon=-121.0892&unit=0&lg=english&FcstType=graphical" &
 fi
 
 download() {
@@ -118,19 +121,19 @@ download() {
 
 # do the download
 if [[ $DOWNLOAD == 0 ]]; then
-  download "assets/wsdot_stevens_pass.jpg" "https://images.wsdot.wa.gov/nc/002vc06430.jpg" &
-  download "assets/wsdot_us2_skykomish.jpg" "https://images.wsdot.wa.gov/nw/002vc04558.jpg" &
-  download "assets/wsdot_mill_creek.jpg" "https://images.wsdot.wa.gov/nc/002vc07057.jpg" &
-  download "assets/wsdot_e_stevens_summit.jpg" "https://images.wsdot.wa.gov/nc/002vc06458.jpg" &
-  download "assets/wsdot_big_windy.jpg" "https://images.wsdot.wa.gov/nc/002vc06300.jpg" &
-  download "assets/wsdot_w_stevens.jpg" "https://images.wsdot.wa.gov/nc/002vc06190.jpg" &
-  download "assets/GOES17_north_pacific.jpg" "https://cdn.star.nesdis.noaa.gov/GOES17/ABI/SECTOR/np/GEOCOLOR/latest.jpg" &
-  download "assets/stevens_cowboy_mountain.jpg" "http://common.snow.com/mtncams/Cowboy%20Mountain.jpg" &
-  download "assets/stevens_skyline.jpg" "http://common.snow.com/mtncams/Skyline.jpg" &
-  download "assets/stevens_glacier_peak.jpg" "http://common.snow.com/mtncams/Glacier%20Peak.jpg" &
-  download "assets/stevens_gemini.jpg" "http://common.snow.com/mtncams/Gemini.jpg" &
-  download "assets/stevens_south_divide.jpg" "http://common.snow.com/mtncams/South%20Divide.jpg" &
-  download "assets/stevens_spbasearea.jpg" "http://common.snow.com/mtncams/SPBaseArea.jpg" &
+  download "$SCRIPT_DIR/assets/wsdot_stevens_pass.jpg" "https://images.wsdot.wa.gov/nc/002vc06430.jpg" &
+  download "$SCRIPT_DIR/assets/wsdot_us2_skykomish.jpg" "https://images.wsdot.wa.gov/nw/002vc04558.jpg" &
+  download "$SCRIPT_DIR/assets/wsdot_mill_creek.jpg" "https://images.wsdot.wa.gov/nc/002vc07057.jpg" &
+  download "$SCRIPT_DIR/assets/wsdot_e_stevens_summit.jpg" "https://images.wsdot.wa.gov/nc/002vc06458.jpg" &
+  download "$SCRIPT_DIR/assets/wsdot_big_windy.jpg" "https://images.wsdot.wa.gov/nc/002vc06300.jpg" &
+  download "$SCRIPT_DIR/assets/wsdot_w_stevens.jpg" "https://images.wsdot.wa.gov/nc/002vc06190.jpg" &
+  download "$SCRIPT_DIR/assets/GOES17_north_pacific.jpg" "https://cdn.star.nesdis.noaa.gov/GOES17/ABI/SECTOR/np/GEOCOLOR/latest.jpg" &
+  download "$SCRIPT_DIR/assets/stevens_cowboy_mountain.jpg" "http://common.snow.com/mtncams/Cowboy%20Mountain.jpg" &
+  download "$SCRIPT_DIR/assets/stevens_skyline.jpg" "http://common.snow.com/mtncams/Skyline.jpg" &
+  download "$SCRIPT_DIR/assets/stevens_glacier_peak.jpg" "http://common.snow.com/mtncams/Glacier%20Peak.jpg" &
+  download "$SCRIPT_DIR/assets/stevens_gemini.jpg" "http://common.snow.com/mtncams/Gemini.jpg" &
+  download "$SCRIPT_DIR/assets/stevens_south_divide.jpg" "http://common.snow.com/mtncams/South%20Divide.jpg" &
+  download "$SCRIPT_DIR/assets/stevens_spbasearea.jpg" "http://common.snow.com/mtncams/SPBaseArea.jpg" &
 fi
 
 # wait for asset collection to complete
@@ -142,19 +145,19 @@ fi
 # crop and resize
 if [[ $CROP == 0 ]]; then
   # adjust extended weather crop based on warnings in place
-  ( TOP_CROP="1200"
-    curl -s "https://forecast.weather.gov/MapClick.php?lat=47.7456&lon=-121.0892&unit=0&lg=english&FcstType=text&TextType=0" | grep 'class="warn"' > /dev/null 2>&1 && TOP_CROP=1450
-  convert assets/weather_gov_extended.jpg -crop 2300x550+250+$TOP_CROP -resize "50%" assets/weather_gov_extended_s.jpg) &
-  convert assets/GOES17_north_pacific.jpg -crop 7200x4050+0+0 -resize "3840>" assets/background_s.jpg &
-  convert assets/nwac_stevens_weather.jpg -crop 1450x2250+100+400 -resize "750>" assets/nwac_stevens_weather_s.jpg &
-  convert assets/nwac_avalanch.jpg -crop 1325x2700+200+1800 -resize "30%" assets/nwac_avalanch_s.jpg &
-  convert assets/weather_gov_hourly.jpg -crop 1690x1800+150+800 -resize "50%" assets/weather_gov_hourly_s.jpg &
-  convert assets/stevens_cowboy_mountain.jpg -crop 1920x1080+0+0 -resize "50%" assets/stevens_cowboy_mountain_s.jpg &
-  convert assets/stevens_skyline.jpg -crop 1920x1080+0+0 -resize "30%" assets/stevens_skyline_s.jpg &
-  convert assets/stevens_glacier_peak.jpg -crop 1920x1080+0+0 -resize "30%" assets/stevens_glacier_peak_s.jpg &
-  convert assets/stevens_gemini.jpg -crop 1920x1080+0+0 -resize "30%" assets/stevens_gemini_s.jpg &
-  convert assets/stevens_south_divide.jpg -crop 1920x1080+0+0 -resize "50%" assets/stevens_south_divide_s.jpg &
-  convert assets/stevens_spbasearea.jpg -crop 1920x1080+0+0 -resize "30%" assets/stevens_spbasearea_s.jpg &
+  ( TOP_CROP="1125"
+    curl -s "https://forecast.weather.gov/MapClick.php?lat=47.7456&lon=-121.0892&unit=0&lg=english&FcstType=text&TextType=0" | grep 'class="warn"' > /dev/null 2>&1 && TOP_CROP=1400
+  convert "$SCRIPT_DIR/assets/weather_gov_extended.jpg" -crop ${TOP_CROP}x240+140+539 -resize "100%" "$SCRIPT_DIR/assets/weather_gov_extended_s.jpg") & 
+  convert "$SCRIPT_DIR/assets/GOES17_north_pacific.jpg" -crop 7200x4050+0+0 -resize "3840>" "$SCRIPT_DIR/assets/background_s.jpg" &
+  convert "$SCRIPT_DIR/assets/nwac_stevens_weather.jpg" -crop 750x1100+80+220 -resize "100%" "$SCRIPT_DIR/assets/nwac_stevens_weather_s.jpg" & 
+  convert "$SCRIPT_DIR/assets/nwac_avalanch.jpg" -crop 700x680+100+900 -resize "80%" "$SCRIPT_DIR/assets/nwac_avalanch_s.jpg" & ###
+  convert "$SCRIPT_DIR/assets/weather_gov_hourly.jpg" -crop 830x890+85+405 -resize "100%" "$SCRIPT_DIR/assets/weather_gov_hourly_s.jpg" & 
+  convert "$SCRIPT_DIR/assets/stevens_cowboy_mountain.jpg" -crop 1920x1080+0+0 -resize "50%" "$SCRIPT_DIR/assets/stevens_cowboy_mountain_s.jpg" &
+  convert "$SCRIPT_DIR/assets/stevens_skyline.jpg" -crop 1920x1080+0+0 -resize "30%" "$SCRIPT_DIR/assets/stevens_skyline_s.jpg" &
+  convert "$SCRIPT_DIR/assets/stevens_glacier_peak.jpg" -crop 1920x1080+0+0 -resize "30%" "$SCRIPT_DIR/assets/stevens_glacier_peak_s.jpg" &
+  convert "$SCRIPT_DIR/assets/stevens_gemini.jpg" -crop 1920x1080+0+0 -resize "30%" "$SCRIPT_DIR/assets/stevens_gemini_s.jpg" &
+  convert "$SCRIPT_DIR/assets/stevens_south_divide.jpg" -crop 1920x1080+0+0 -resize "50%" "$SCRIPT_DIR/assets/stevens_south_divide_s.jpg" &
+  convert "$SCRIPT_DIR/assets/stevens_spbasearea.jpg" -crop 1920x1080+0+0 -resize "30%" "$SCRIPT_DIR/assets/stevens_spbasearea_s.jpg" &
   wait
   echo "Croping completed..."
 fi
@@ -162,34 +165,34 @@ fi
 # composit the image
 if [[ $RENDER == 0 ]]; then
   convert -size 3840x2160 xc:skyblue \
-    assets/background_s.jpg -geometry +0+0 -composite \
-    assets/nwac_stevens_weather_s.jpg -geometry +50+50 -composite \
-    assets/wsdot_us2_skykomish.jpg -geometry +825+50 -composite \
-    assets/wsdot_w_stevens.jpg -geometry +1175+50 -composite \
-    assets/wsdot_big_windy.jpg -geometry +1526+50 -composite \
-    assets/wsdot_stevens_pass.jpg -geometry +1875+50 -composite \
-    assets/wsdot_e_stevens_summit.jpg -geometry +2226+50 -composite \
-    assets/wsdot_mill_creek.jpg -geometry +2586+50 -composite \
-    assets/stevens_cowboy_mountain_s.jpg -geometry +910+900 -composite \
-    assets/stevens_skyline_s.jpg -geometry +1504+1780 -composite \
-    assets/stevens_glacier_peak_s.jpg -geometry +2115+1780 -composite \
-    assets/stevens_gemini_s.jpg -geometry +2725+1780 -composite \
-    assets/stevens_south_divide_s.jpg -geometry +840+330 -composite \
-    assets/stevens_spbasearea_s.jpg -geometry +910+1780 -composite \
-    assets/nwac_avalanch_s.jpg -geometry +3250+50 -composite \
-    assets/weather_gov_hourly_s.jpg -geometry +50+1230 -composite \
-    assets/weather_gov_extended_s.jpg -geometry +920+1476 -composite \
-    rendered/$RENDERED_FILENAME
+    "$SCRIPT_DIR/assets/background_s.jpg" -geometry +0+0 -composite \
+    "$SCRIPT_DIR/assets/nwac_stevens_weather_s.jpg" -geometry +50+50 -composite \
+    "$SCRIPT_DIR/assets/wsdot_us2_skykomish.jpg" -geometry +825+50 -composite \
+    "$SCRIPT_DIR/assets/wsdot_w_stevens.jpg" -geometry +1175+50 -composite \
+    "$SCRIPT_DIR/assets/wsdot_big_windy.jpg" -geometry +1526+50 -composite \
+    "$SCRIPT_DIR/assets/wsdot_stevens_pass.jpg" -geometry +1875+50 -composite \
+    "$SCRIPT_DIR/assets/wsdot_e_stevens_summit.jpg" -geometry +2226+50 -composite \
+    "$SCRIPT_DIR/assets/wsdot_mill_creek.jpg" -geometry +2586+50 -composite \
+    "$SCRIPT_DIR/assets/stevens_cowboy_mountain_s.jpg" -geometry +910+900 -composite \
+    "$SCRIPT_DIR/assets/stevens_skyline_s.jpg" -geometry +1504+1780 -composite \
+    "$SCRIPT_DIR/assets/stevens_glacier_peak_s.jpg" -geometry +2115+1780 -composite \
+    "$SCRIPT_DIR/assets/stevens_gemini_s.jpg" -geometry +2725+1780 -composite \
+    "$SCRIPT_DIR/assets/stevens_south_divide_s.jpg" -geometry +840+330 -composite \
+    "$SCRIPT_DIR/assets/stevens_spbasearea_s.jpg" -geometry +910+1780 -composite \
+    "$SCRIPT_DIR/assets/nwac_avalanch_s.jpg" -geometry +3000+50 -composite \
+    "$SCRIPT_DIR/assets/weather_gov_hourly_s.jpg" -geometry +50+1230 -composite \
+    "$SCRIPT_DIR/assets/weather_gov_extended_s.jpg" -geometry +920+1476 -composite \
+    "$SCRIPT_DIR/rendered/$RENDERED_FILENAME"
   echo "Rendering Completed..."
 fi
 
 # set the desktop pattern
 if [[ $DESKTOP == 0 ]]; then
-  if [[ -f rendered/$RENDERED_FILENAME ]]; then
-    echo "setting desktop to rendered/$RENDERED_FILENAME"
-    desktoppr 0 rendered/$RENDERED_FILENAME
+  if [[ -f "$SCRIPT_DIR/rendered/$RENDERED_FILENAME" ]]; then
+    echo "setting desktop to $SCRIPT_DIR/rendered/$RENDERED_FILENAME"
+    desktoppr 0 "$SCRIPT_DIR/rendered/$RENDERED_FILENAME"
   else
-    echo "Rendered file rendered/$RENDERED_FILENAME not found..."
+    echo "Rendered file $SCRIPT_DIR/rendered/$RENDERED_FILENAME not found..."
     echo "Run with render and set desktop at the same time"
   fi
 fi

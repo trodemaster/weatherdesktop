@@ -70,8 +70,11 @@ SCRIPT_DIR="$( cd "$( dirname "${BASH_SOURCE[0]}" )" >/dev/null 2>&1 && pwd )"
 echo $SCRIPT_DIR
 
 # flush assets
-if [[ $FLUSH == 0 ]] && [[ -e "$SCRIPT_DIR/assets/*.jpg" ]]; then
-  rm "$SCRIPT_DIR/assets/*.jpg"
+if [[ $FLUSH == 0 ]] && CLEANUP_FILES=$(compgen -G "${SCRIPT_DIR}/assets/*.jpg"); then
+  for CLEANUP_FILE in $CLEANUP_FILES; do
+    echo "removing $CLEANUP_FILE"
+    rm $CLEANUP_FILE
+  done
 fi
 
 # scrape function
@@ -90,7 +93,7 @@ scrape() {
   RETRY_COUNTER=0
   until [ "$RETRY_COUNTER" -ge 5 ]; do
     echo "scraping $OUTPUT_FILE"
-    timeout 15s "$CHROME" --headless --disable-gpu --run-all-compositor-stages-before-draw --virtual-time-budget=10000 --window-size=2000x5000*4 -disk-cache-dir=${TMPDIR}wd --user-data-dir=${TMPDIR}wd --crash-dumps-dir=${TMPDIR}wd --screenshot="$OUTPUT_FILE" --window-size="$WINDOW_SIZE" "$TARGET_URL" && break
+    timeout 15s "$CHROME" --headless --disable-gpu --run-all-compositor-stages-before-draw --virtual-time-budget=10000 --window-size=2000x5000*4 -disk-cache-dir=${TMPDIR}wd --user-data-dir=${TMPDIR}wd --crash-dumps-dir=${TMPDIR}wd --screenshot="$OUTPUT_FILE" --window-size="$WINDOW_SIZE" --force-device-scale-factor=1 "$TARGET_URL" && break
     RETRY_COUNTER=$((RETRY_COUNTER + 1))
   done
 }
@@ -150,7 +153,7 @@ if [[ $CROP == 0 ]]; then
   convert "$SCRIPT_DIR/assets/weather_gov_extended.jpg" -crop ${TOP_CROP}x240+140+539 -resize "100%" "$SCRIPT_DIR/assets/weather_gov_extended_s.jpg") & 
   convert "$SCRIPT_DIR/assets/GOES17_north_pacific.jpg" -crop 7200x4050+0+0 -resize "3840>" "$SCRIPT_DIR/assets/background_s.jpg" &
   convert "$SCRIPT_DIR/assets/nwac_stevens_weather.jpg" -crop 750x1100+80+220 -resize "100%" "$SCRIPT_DIR/assets/nwac_stevens_weather_s.jpg" & 
-  convert "$SCRIPT_DIR/assets/nwac_avalanch.jpg" -crop 700x680+100+900 -resize "80%" "$SCRIPT_DIR/assets/nwac_avalanch_s.jpg" & ###
+  convert "$SCRIPT_DIR/assets/nwac_avalanch.jpg" -crop 700x680+100+800 -resize "80%" "$SCRIPT_DIR/assets/nwac_avalanch_s.jpg" & ###
   convert "$SCRIPT_DIR/assets/weather_gov_hourly.jpg" -crop 830x890+85+405 -resize "100%" "$SCRIPT_DIR/assets/weather_gov_hourly_s.jpg" & 
   convert "$SCRIPT_DIR/assets/stevens_cowboy_mountain.jpg" -crop 1920x1080+0+0 -resize "50%" "$SCRIPT_DIR/assets/stevens_cowboy_mountain_s.jpg" &
   convert "$SCRIPT_DIR/assets/stevens_skyline.jpg" -crop 1920x1080+0+0 -resize "30%" "$SCRIPT_DIR/assets/stevens_skyline_s.jpg" &

@@ -116,7 +116,7 @@ download() {
   RETRY_COUNTER=0
   until [ "$RETRY_COUNTER" -ge 5 ]; do
     echo "Downloading $OUTPUT_FILE"
-    wget --quiet "$TARGET_URL" -O "$OUTPUT_FILE" && break
+    wget --no-check-certificate "$TARGET_URL" -O "$OUTPUT_FILE" && break
     sleep 5
     RETRY_COUNTER=$((RETRY_COUNTER + 1))
   done

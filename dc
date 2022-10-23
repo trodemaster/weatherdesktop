@@ -93,7 +93,7 @@ download() {
 
 # do the download
 if [[ $DOWNLOAD == 0 ]]; then
-  download "$SCRIPT_DIR/assets/$RENDERED_FILENAME" "http://192.150.23.219/snap.jpeg" &
+  download "$SCRIPT_DIR/assets/$RENDERED_FILENAME" "http://periscope.jibb.tv/snap.jpeg" &
 fi
 
 # wait for asset collection to complete

@@ -135,9 +135,11 @@ if [[ $DOWNLOAD == 0 ]]; then
 #  download "$SCRIPT_DIR/assets/stevens_skyline.jpg" "http://common.snow.com/mtncams/Skyline.jpg" &
   download "$SCRIPT_DIR/assets/stevens_skyline.jpg" "https://cache.snow.com/mtncams/Skyline.jpg" &
   download "$SCRIPT_DIR/assets/stevens_glacier_peak.jpg" "http://cache.snow.com/mtncams/Glacier%20Peak.jpg" &
-  download "$SCRIPT_DIR/assets/stevens_gemini.jpg" "http://cache.snow.com/mtncams/Gemini.jpg" &
-  download "$SCRIPT_DIR/assets/stevens_south_divide.jpg" "http://cache.snow.com/mtncams/South%20Divide.jpg" &
+#  download "$SCRIPT_DIR/assets/stevens_gemini.jpg" "http://cache.snow.com/mtncams/Gemini.jpg" &
+#  download "$SCRIPT_DIR/assets/stevens_south_divide.jpg" "http://cache.snow.com/mtncams/South%20Divide.jpg" &
+  download "$SCRIPT_DIR/assets/stevenspasssnowstake.jpg" "https://live8p.brownrice.com/cam-images/stevenspasssnowstake.jpg" &
   download "$SCRIPT_DIR/assets/stevens_spbasearea.jpg" "http://cache.snow.com/mtncams/SPBaseArea.jpg" &
+  download "$SCRIPT_DIR/assets/stevenspassjupiter.jpg" "https://live8p.brownrice.com/cam-images/stevenspassjupiter.jpg" &
 fi
 
 # wait for asset collection to complete
@@ -154,14 +156,17 @@ if [[ $CROP == 0 ]]; then
   convert "$SCRIPT_DIR/assets/weather_gov_extended.jpg" -crop ${TOP_CROP}x240+140+539 -resize "100%" "$SCRIPT_DIR/assets/weather_gov_extended_s.jpg") & 
   convert "$SCRIPT_DIR/assets/GOES17_north_pacific.jpg" -crop 7200x4050+0+0 -resize "3840>" "$SCRIPT_DIR/assets/background_s.jpg" &
   convert "$SCRIPT_DIR/assets/nwac_stevens_weather.jpg" -crop 750x1100+80+220 -resize "100%" "$SCRIPT_DIR/assets/nwac_stevens_weather_s.jpg" & 
-  convert "$SCRIPT_DIR/assets/nwac_avalanch.jpg" -crop 700x680+100+800 -resize "80%" "$SCRIPT_DIR/assets/nwac_avalanch_s.jpg" & ###
+  convert "$SCRIPT_DIR/assets/nwac_avalanch.jpg" -crop 700x680+100+800 -resize "80%" "$SCRIPT_DIR/assets/nwac_avalanch_s.jpg" &
   convert "$SCRIPT_DIR/assets/weather_gov_hourly.jpg" -crop 830x890+85+405 -resize "100%" "$SCRIPT_DIR/assets/weather_gov_hourly_s.jpg" & 
-  convert "$SCRIPT_DIR/assets/stevens_cowboy_mountain.jpg" -crop 1920x1080+0+0 -resize "50%" "$SCRIPT_DIR/assets/stevens_cowboy_mountain_s.jpg" &
-  convert "$SCRIPT_DIR/assets/stevens_skyline.jpg" -crop 1920x1080+0+0 -resize "30%" "$SCRIPT_DIR/assets/stevens_skyline_s.jpg" &
+#  convert "$SCRIPT_DIR/assets/stevens_cowboy_mountain.jpg" -crop 1920x1080+0+0 -resize "50%" "$SCRIPT_DIR/assets/stevens_cowboy_mountain_s.jpg" &
+  convert "$SCRIPT_DIR/assets/stevens_skyline.jpg" -crop 1920x1080+0+0 -resize "45%" "$SCRIPT_DIR/assets/stevens_skyline_s.jpg" &
+#  convert "$SCRIPT_DIR/assets/stevens_glacier_peak.jpg" -crop 1920x1080+0+0 -resize "30%" "$SCRIPT_DIR/assets/stevens_glacier_peak_s.jpg" &
   convert "$SCRIPT_DIR/assets/stevens_glacier_peak.jpg" -crop 1920x1080+0+0 -resize "30%" "$SCRIPT_DIR/assets/stevens_glacier_peak_s.jpg" &
-  convert "$SCRIPT_DIR/assets/stevens_gemini.jpg" -crop 1920x1080+0+0 -resize "30%" "$SCRIPT_DIR/assets/stevens_gemini_s.jpg" &
-  convert "$SCRIPT_DIR/assets/stevens_south_divide.jpg" -crop 1920x1080+0+0 -resize "50%" "$SCRIPT_DIR/assets/stevens_south_divide_s.jpg" &
-  convert "$SCRIPT_DIR/assets/stevens_spbasearea.jpg" -crop 1920x1080+0+0 -resize "30%" "$SCRIPT_DIR/assets/stevens_spbasearea_s.jpg" &
+#  convert "$SCRIPT_DIR/assets/stevens_gemini.jpg" -crop 1920x1080+0+0 -resize "30%" "$SCRIPT_DIR/assets/stevens_gemini_s.jpg" &
+#  convert "$SCRIPT_DIR/assets/stevens_south_divide.jpg" -crop 1920x1080+0+0 -resize "50%" "$SCRIPT_DIR/assets/stevens_south_divide_s.jpg" &
+  convert "$SCRIPT_DIR/assets/stevenspassjupiter.jpg" -crop 3840x2160+0+0 -resize "40%" "$SCRIPT_DIR/assets/stevenspassjupiter_s.jpg" &
+  convert "$SCRIPT_DIR/assets/stevenspasssnowstake.jpg" -crop 1920x1080+0+0 -resize "50%" "$SCRIPT_DIR/assets/stevenspasssnowstake_s.jpg" &
+  convert "$SCRIPT_DIR/assets/stevens_spbasearea.jpg" -crop 1920x1080+0+0 -resize "45%" "$SCRIPT_DIR/assets/stevens_spbasearea_s.jpg" &
   wait
   echo "Croping completed..."
 fi
@@ -177,18 +182,19 @@ if [[ $RENDER == 0 ]]; then
     "$SCRIPT_DIR/assets/wsdot_stevens_pass.jpg" -geometry +1875+50 -composite \
     "$SCRIPT_DIR/assets/wsdot_e_stevens_summit.jpg" -geometry +2226+50 -composite \
     "$SCRIPT_DIR/assets/wsdot_mill_creek.jpg" -geometry +2586+50 -composite \
-    "$SCRIPT_DIR/assets/stevens_cowboy_mountain_s.jpg" -geometry +910+900 -composite \
-    "$SCRIPT_DIR/assets/stevens_skyline_s.jpg" -geometry +1504+1780 -composite \
-    "$SCRIPT_DIR/assets/stevens_glacier_peak_s.jpg" -geometry +2115+1780 -composite \
-    "$SCRIPT_DIR/assets/stevens_gemini_s.jpg" -geometry +2725+1780 -composite \
-    "$SCRIPT_DIR/assets/stevens_south_divide_s.jpg" -geometry +840+330 -composite \
-    "$SCRIPT_DIR/assets/stevens_spbasearea_s.jpg" -geometry +910+1780 -composite \
+    "$SCRIPT_DIR/assets/stevens_skyline_s.jpg" -geometry +1800+1650 -composite \
+    "$SCRIPT_DIR/assets/stevenspassjupiter_s.jpg" -geometry +840+330 -composite \
+    "$SCRIPT_DIR/assets/stevenspasssnowstake_s.jpg" -geometry +910+1250 -composite \
+    "$SCRIPT_DIR/assets/stevens_spbasearea_s.jpg" -geometry +910+1650 -composite \
     "$SCRIPT_DIR/assets/nwac_avalanch_s.jpg" -geometry +3000+50 -composite \
-    "$SCRIPT_DIR/assets/weather_gov_hourly_s.jpg" -geometry +50+1230 -composite \
-    "$SCRIPT_DIR/assets/weather_gov_extended_s.jpg" -geometry +920+1476 -composite \
+    "$SCRIPT_DIR/assets/weather_gov_hourly_s.jpg" -geometry +50+1250 -composite \
+    "$SCRIPT_DIR/assets/weather_gov_extended_s.jpg" -geometry +2680+1900 -composite \
     "$SCRIPT_DIR/rendered/$RENDERED_FILENAME"
   echo "Rendering Completed..."
 fi
+#    "$SCRIPT_DIR/assets/stevens_cowboy_mountain_s.jpg" -geometry +910+900 -composite \
+#    "$SCRIPT_DIR/assets/stevens_south_divide_s.jpg" -geometry +840+330 -composite \
+#    "$SCRIPT_DIR/assets/stevens_gemini_s.jpg" -geometry +2725+1780 -composite \
 
 # set the desktop pattern
 if [[ $DESKTOP == 0 ]]; then

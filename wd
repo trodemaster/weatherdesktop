@@ -132,7 +132,7 @@ if [[ $DOWNLOAD == 0 ]]; then
   download "$SCRIPT_DIR/assets/wsdot_w_stevens.jpg" "https://images.wsdot.wa.gov/nc/002vc06190.jpg" &
   download "$SCRIPT_DIR/assets/GOES17_north_pacific.jpg" "https://cdn.star.nesdis.noaa.gov/GOES17/ABI/SECTOR/np/GEOCOLOR/latest.jpg" &
   download "$SCRIPT_DIR/assets/stevens_cowboy_mountain.jpg" "http://common.snow.com/mtncams/Cowboy%20Mountain.jpg" &
-#  download "$SCRIPT_DIR/assets/stevens_skyline.jpg" "http://common.snow.com/mtncams/Skyline.jpg" &
+  download "$SCRIPT_DIR/assets/stevenspasscourtyard.jpg" "https://live8p.brownrice.com/cam-images/stevenspasscourtyard.jpg" &
   download "$SCRIPT_DIR/assets/stevens_skyline.jpg" "https://cache.snow.com/mtncams/Skyline.jpg" &
   download "$SCRIPT_DIR/assets/stevens_glacier_peak.jpg" "http://cache.snow.com/mtncams/Glacier%20Peak.jpg" &
 #  download "$SCRIPT_DIR/assets/stevens_gemini.jpg" "http://cache.snow.com/mtncams/Gemini.jpg" &
@@ -158,7 +158,7 @@ if [[ $CROP == 0 ]]; then
   convert "$SCRIPT_DIR/assets/nwac_stevens_weather.jpg" -crop 750x1100+80+220 -resize "100%" "$SCRIPT_DIR/assets/nwac_stevens_weather_s.jpg" & 
   convert "$SCRIPT_DIR/assets/nwac_avalanch.jpg" -crop 700x680+100+800 -resize "80%" "$SCRIPT_DIR/assets/nwac_avalanch_s.jpg" &
   convert "$SCRIPT_DIR/assets/weather_gov_hourly.jpg" -crop 830x890+85+405 -resize "100%" "$SCRIPT_DIR/assets/weather_gov_hourly_s.jpg" & 
-#  convert "$SCRIPT_DIR/assets/stevens_cowboy_mountain.jpg" -crop 1920x1080+0+0 -resize "50%" "$SCRIPT_DIR/assets/stevens_cowboy_mountain_s.jpg" &
+  convert "$SCRIPT_DIR/assets/stevenspasscourtyard.jpg" -crop 1920x1080+0+0 -resize "50%" "$SCRIPT_DIR/assets/stevenspasscourtyard_s.jpg" &
   convert "$SCRIPT_DIR/assets/stevens_skyline.jpg" -crop 1920x1080+0+0 -resize "45%" "$SCRIPT_DIR/assets/stevens_skyline_s.jpg" &
 #  convert "$SCRIPT_DIR/assets/stevens_glacier_peak.jpg" -crop 1920x1080+0+0 -resize "30%" "$SCRIPT_DIR/assets/stevens_glacier_peak_s.jpg" &
   convert "$SCRIPT_DIR/assets/stevens_glacier_peak.jpg" -crop 1920x1080+0+0 -resize "30%" "$SCRIPT_DIR/assets/stevens_glacier_peak_s.jpg" &
@@ -189,6 +189,7 @@ if [[ $RENDER == 0 ]]; then
     "$SCRIPT_DIR/assets/nwac_avalanch_s.jpg" -geometry +3000+50 -composite \
     "$SCRIPT_DIR/assets/weather_gov_hourly_s.jpg" -geometry +50+1250 -composite \
     "$SCRIPT_DIR/assets/weather_gov_extended_s.jpg" -geometry +2680+1900 -composite \
+    "$SCRIPT_DIR/assets/stevenspasscourtyard_s.jpg" -geometry +1600+1250 -composite \
     "$SCRIPT_DIR/rendered/$RENDERED_FILENAME"
   echo "Rendering Completed..."
 fi

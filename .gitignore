@@ -1,1 +1,3 @@
 .DS_Store
+scrape/.venv_scrape
+.venv_scrape

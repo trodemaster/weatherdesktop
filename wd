@@ -82,26 +82,11 @@ if [[ $FLUSH == 0 ]] && CLEANUP_FILES=$(compgen -G "${SCRIPT_DIR}/assets/*"); th
   done
 fi
 
-download() {
-  set +e
-  OUTPUT_FILE="$1"
-  TARGET_URL="$2"
-  # retry with counter
-  RETRY_COUNTER=0
-  until [ "$RETRY_COUNTER" -ge 5 ]; do
-    echo "Downloading $OUTPUT_FILE"
-    wget --no-check-certificate "$TARGET_URL" -O "$OUTPUT_FILE" && break
-    sleep 5
-    RETRY_COUNTER=$((RETRY_COUNTER + 1))
-  done
-}
-
 # do the download
 if [[ $DOWNLOAD == 0 ]]; then
   wget --no-check-certificate --retry-connrefused --waitretry=1 --read-timeout=20 --timeout=15 "https://cdn.star.nesdis.noaa.gov/GOES17/ABI/SECTOR/np/GEOCOLOR/latest.jpg" -O "$SCRIPT_DIR/assets/GOES17_north_pacific.jpg" &
   wget --no-check-certificate --retry-connrefused --waitretry=1 --read-timeout=20 --timeout=15 "https://images.wsdot.wa.gov/nc/002vc06430.jpg" -O "$SCRIPT_DIR/assets/wsdot_stevens_pass.jpg" &
   wget --no-check-certificate --retry-connrefused --waitretry=1 --read-timeout=20 --timeout=15 "https://images.wsdot.wa.gov/nw/002vc04558.jpg" -O "$SCRIPT_DIR/assets/wsdot_us2_skykomish.jpg" &
-  wget --no-check-certificate --retry-connrefused --waitretry=1 --read-timeout=20 --timeout=15 "https://images.wsdot.wa.gov/nc/002vc07057.jpg" -O "$SCRIPT_DIR/assets/wsdot_mill_creek.jpg" &
   wget --no-check-certificate --retry-connrefused --waitretry=1 --read-timeout=20 --timeout=15 "https://images.wsdot.wa.gov/nc/002vc06458.jpg" -O "$SCRIPT_DIR/assets/wsdot_e_stevens_summit.jpg" &
   wget --no-check-certificate --retry-connrefused --waitretry=1 --read-timeout=20 --timeout=15 "https://images.wsdot.wa.gov/nc/002vc06300.jpg" -O "$SCRIPT_DIR/assets/wsdot_big_windy.jpg" &
   wget --no-check-certificate --retry-connrefused --waitretry=1 --read-timeout=20 --timeout=15 "https://images.wsdot.wa.gov/nc/002vc06190.jpg" -O "$SCRIPT_DIR/assets/wsdot_w_stevens.jpg" &
@@ -110,18 +95,6 @@ if [[ $DOWNLOAD == 0 ]]; then
   wget --no-check-certificate --retry-connrefused --waitretry=1 --read-timeout=20 --timeout=15 "https://live8p.brownrice.com/cam-images/stevenspasssnowstake.jpg" -O "$SCRIPT_DIR/assets/stevenspasssnowstake.jpg" &
   wget --no-check-certificate --retry-connrefused --waitretry=1 --read-timeout=20 --timeout=15 "http://cache.snow.com/mtncams/SPBaseArea.jpg" -O "$SCRIPT_DIR/assets/stevens_spbasearea.jpg" &
   wget --no-check-certificate --retry-connrefused --waitretry=1 --read-timeout=20 --timeout=15 "https://live8p.brownrice.com/cam-images/stevenspassjupiter.jpg" -O "$SCRIPT_DIR/assets/stevenspassjupiter.jpg" &
-
-
-  #download "$SCRIPT_DIR/assets/wsdot_us2_skykomish.jpg" "https://images.wsdot.wa.gov/nw/002vc04558.jpg" &
-  #download "$SCRIPT_DIR/assets/wsdot_mill_creek.jpg" "https://images.wsdot.wa.gov/nc/002vc07057.jpg" &
-  #download "$SCRIPT_DIR/assets/wsdot_e_stevens_summit.jpg" "https://images.wsdot.wa.gov/nc/002vc06458.jpg" &
-  #download "$SCRIPT_DIR/assets/wsdot_big_windy.jpg" "https://images.wsdot.wa.gov/nc/002vc06300.jpg" &
-  #download "$SCRIPT_DIR/assets/wsdot_w_stevens.jpg" "https://images.wsdot.wa.gov/nc/002vc06190.jpg" &
-  #download "$SCRIPT_DIR/assets/stevenspasscourtyard.jpg" "https://live8p.brownrice.com/cam-images/stevenspasscourtyard.jpg" &
-  #download "$SCRIPT_DIR/assets/stevens_skyline.jpg" "https://cache.snow.com/mtncams/Skyline.jpg" &
-  #download "$SCRIPT_DIR/assets/stevenspasssnowstake.jpg" "https://live8p.brownrice.com/cam-images/stevenspasssnowstake.jpg" &
-  #download "$SCRIPT_DIR/assets/stevens_spbasearea.jpg" "http://cache.snow.com/mtncams/SPBaseArea.jpg" &
-  #download "$SCRIPT_DIR/assets/stevenspassjupiter.jpg" "https://live8p.brownrice.com/cam-images/stevenspassjupiter.jpg" &
 fi
 
 # setup python venv and run shot scraper
@@ -151,7 +124,7 @@ fi
 # crop and resize
 if [[ $CROP == 0 ]]; then
   convert "$SCRIPT_DIR/assets/GOES17_north_pacific.jpg" -crop 7200x4050+0+0 -resize "3840>" "$SCRIPT_DIR/assets/background_s.jpg" &
-  convert "$SCRIPT_DIR/assets/nwac_avalanche_forcast.png" -crop 555x580+0+80 -resize "100%" "$SCRIPT_DIR/assets/nwac_avalanche_forcast_s.jpg" &
+  convert "$SCRIPT_DIR/assets/nwac_avalanche_forcast.png" -crop 555x570+0+80 -resize "100%" "$SCRIPT_DIR/assets/nwac_avalanche_forcast_s.jpg" &
   convert "$SCRIPT_DIR/assets/nwac_stevens_avalanche_forcast.png" -crop 1086x380+0+25 -resize "100%" "$SCRIPT_DIR/assets/nwac_stevens_avalanche_forcast_s.jpg" &
   convert "$SCRIPT_DIR/assets/nwac_stevens_observations.png" -crop 1140x1439+0+0 -resize "75%" "$SCRIPT_DIR/assets/nwac_stevens_observations_s.jpg" &
   convert "$SCRIPT_DIR/assets/weather_gov_hourly_forecast.png" -crop 806x930+0+200 -resize "106%" "$SCRIPT_DIR/assets/weather_gov_hourly_forecast_s.jpg" &
@@ -172,15 +145,14 @@ if [[ $RENDER == 0 ]]; then
     "$SCRIPT_DIR/assets/background_s.jpg" -geometry +0+0 -composite \
     "$SCRIPT_DIR/assets/weather_gov_hourly_forecast_s.jpg" -geometry +20+1130 -composite \
     "$SCRIPT_DIR/assets/weather_gov_extended_forecast_s.jpg" -geometry +2680+1860 -composite \
-    "$SCRIPT_DIR/assets/nwac_stevens_avalanche_forcast_s.jpg" -geometry +3000+50 -composite \
-    "$SCRIPT_DIR/assets/nwac_avalanche_forcast_s.jpg" -geometry +2650+350 -composite \
+    "$SCRIPT_DIR/assets/nwac_stevens_avalanche_forcast_s.jpg" -geometry +2730+20 -composite \
+    "$SCRIPT_DIR/assets/nwac_avalanche_forcast_s.jpg" -geometry +3260+420 -composite \
     "$SCRIPT_DIR/assets/nwac_stevens_observations_s.jpg" -geometry +20+20 -composite \
     "$SCRIPT_DIR/assets/wsdot_us2_skykomish.jpg" -geometry +900+20 -composite \
     "$SCRIPT_DIR/assets/wsdot_w_stevens.jpg" -geometry +1250+20 -composite \
     "$SCRIPT_DIR/assets/wsdot_big_windy.jpg" -geometry +1600+20 -composite \
     "$SCRIPT_DIR/assets/wsdot_stevens_pass_b.jpg" -geometry +1950+20 -composite \
     "$SCRIPT_DIR/assets/wsdot_e_stevens_summit.jpg" -geometry +2360+20 -composite \
-    "$SCRIPT_DIR/assets/wsdot_mill_creek.jpg" -geometry +270+20 -composite \
     "$SCRIPT_DIR/assets/stevens_skyline_s.jpg" -geometry +1800+1650 -composite \
     "$SCRIPT_DIR/assets/stevenspassjupiter_s.jpg" -geometry +900+285 -composite \
     "$SCRIPT_DIR/assets/stevenspasssnowstake_s.jpg" -geometry +910+1250 -composite \

@@ -131,7 +131,7 @@ if [[ $DOWNLOAD == 0 ]]; then
   download "$SCRIPT_DIR/assets/wsdot_big_windy.jpg" "https://images.wsdot.wa.gov/nc/002vc06300.jpg" &
   download "$SCRIPT_DIR/assets/wsdot_w_stevens.jpg" "https://images.wsdot.wa.gov/nc/002vc06190.jpg" &
   download "$SCRIPT_DIR/assets/GOES17_north_pacific.jpg" "https://cdn.star.nesdis.noaa.gov/GOES17/ABI/SECTOR/np/GEOCOLOR/latest.jpg" &
-  download "$SCRIPT_DIR/assets/stevens_cowboy_mountain.jpg" "http://common.snow.com/mtncams/Cowboy%20Mountain.jpg" &
+#  download "$SCRIPT_DIR/assets/stevens_cowboy_mountain.jpg" "http://common.snow.com/mtncams/Cowboy%20Mountain.jpg" &
   download "$SCRIPT_DIR/assets/stevenspasscourtyard.jpg" "https://live8p.brownrice.com/cam-images/stevenspasscourtyard.jpg" &
   download "$SCRIPT_DIR/assets/stevens_skyline.jpg" "https://cache.snow.com/mtncams/Skyline.jpg" &
   download "$SCRIPT_DIR/assets/stevens_glacier_peak.jpg" "http://cache.snow.com/mtncams/Glacier%20Peak.jpg" &
@@ -206,6 +206,12 @@ if [[ $DESKTOP == 0 ]]; then
     echo "Rendered file $SCRIPT_DIR/rendered/$RENDERED_FILENAME not found..."
     echo "Run with render and set desktop at the same time"
   fi
+fi
+
+# save current image to cdn for web access
+if [[ -d /Volumes/Bomb20/cdn ]]; then
+  echo "copying $SCRIPT_DIR/rendered/$RENDERED_FILENAME to /Volumes/Bomb20/cdn"
+  cp "$SCRIPT_DIR/rendered/$RENDERED_FILENAME" /Volumes/Bomb20/cdn/stevens_pass.jpg
 fi
 
 echo "End of Line..."

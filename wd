@@ -105,6 +105,7 @@ if [[ $SCRAPE == 0 ]]; then
     source "${SCRIPT_DIR}/.venv_scrape/bin/activate"
     pip install --upgrade pip
     pip install shot-scraper
+    playwright install
   else
     source "${SCRIPT_DIR}/.venv_scrape/bin/activate"
     shot-scraper 'https://forecast.weather.gov/MapClick.php?lat=47.7456&lon=-121.0892&unit=0&lg=english&FcstType=graphical' -o "${SCRIPTPATH}/assets/weather_gov_hourly_forecast.png" --selector 'body > table:nth-child(6)'

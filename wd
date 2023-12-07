@@ -124,7 +124,7 @@ fi
 # crop and resize
 if [[ $CROP == 0 ]]; then
   convert "$SCRIPT_DIR/assets/GOES17_north_pacific.jpg" -crop 7200x4050+0+0 -resize "3840>" "$SCRIPT_DIR/assets/background_s.jpg" &
-  convert "$SCRIPT_DIR/assets/nwac_avalanche_forcast.png" -crop 555x570+0+80 -resize "100%" "$SCRIPT_DIR/assets/nwac_avalanche_forcast_s.jpg" &
+  convert "$SCRIPT_DIR/assets/nwac_avalanche_forcast.png" -crop 400x520+65+110 -resize "100%" "$SCRIPT_DIR/assets/nwac_avalanche_forcast_s.jpg" &
   convert "$SCRIPT_DIR/assets/nwac_stevens_avalanche_forcast.png" -crop 1086x380+0+25 -resize "100%" "$SCRIPT_DIR/assets/nwac_stevens_avalanche_forcast_s.jpg" &
   convert "$SCRIPT_DIR/assets/nwac_stevens_observations.png" -crop 1140x1439+0+0 -resize "75%" "$SCRIPT_DIR/assets/nwac_stevens_observations_s.jpg" &
   convert "$SCRIPT_DIR/assets/weather_gov_hourly_forecast.png" -crop 806x930+0+200 -resize "106%" "$SCRIPT_DIR/assets/weather_gov_hourly_forecast_s.jpg" &
@@ -146,7 +146,7 @@ if [[ $RENDER == 0 ]]; then
     "$SCRIPT_DIR/assets/weather_gov_hourly_forecast_s.jpg" -geometry +20+1130 -composite \
     "$SCRIPT_DIR/assets/weather_gov_extended_forecast_s.jpg" -geometry +2680+1860 -composite \
     "$SCRIPT_DIR/assets/nwac_stevens_avalanche_forcast_s.jpg" -geometry +2730+20 -composite \
-    "$SCRIPT_DIR/assets/nwac_avalanche_forcast_s.jpg" -geometry +3260+420 -composite \
+    "$SCRIPT_DIR/assets/nwac_avalanche_forcast_s.jpg" -geometry +3420+420 -composite \
     "$SCRIPT_DIR/assets/nwac_stevens_observations_s.jpg" -geometry +20+20 -composite \
     "$SCRIPT_DIR/assets/wsdot_us2_skykomish.jpg" -geometry +900+20 -composite \
     "$SCRIPT_DIR/assets/wsdot_w_stevens.jpg" -geometry +1250+20 -composite \

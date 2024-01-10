@@ -110,7 +110,7 @@ if [[ $SCRAPE == 0 ]]; then
     source "${SCRIPT_DIR}/.venv_scrape/bin/activate"
     shot-scraper 'https://forecast.weather.gov/MapClick.php?lat=47.7456&lon=-121.0892&unit=0&lg=english&FcstType=graphical' -o "${SCRIPTPATH}/assets/weather_gov_hourly_forecast.png" --selector 'body > table:nth-child(6)'
     shot-scraper 'https://forecast.weather.gov/MapClick.php?lat=47.7456&lon=-121.0892' -o "${SCRIPTPATH}/assets/weather_gov_extended_forecast.png" --selector '#seven-day-forecast'
-    shot-scraper 'https://nwac.us/data-portal/graph/21/' -o "${SCRIPTPATH}/assets/nwac_stevens_observations.png" --selector '#post-146 > div' --wait 5000
+    shot-scraper 'https://nwac.us/data-portal/graph/21/' -o "${SCRIPTPATH}/assets/nwac_stevens_observations.png" --selector '#post-146 > div' --wait 8000
     shot-scraper 'https://nwac.us/avalanche-forecast/#/stevens-pass' -o "${SCRIPTPATH}/assets/nwac_stevens_avalanche_forcast.png" --selector '#nac-forecast-container > div > div.nac-card.nac-content-panel.nac-content-panel-tab > div > div.pswipe-gallery > div > div.nac-danger.nac-mb-4' --wait 1000
     shot-scraper 'https://nwac.us' -o "${SCRIPTPATH}/assets/nwac_avalanche_forcast.png" --selector '#danger-map-widget' --wait 1000
   fi

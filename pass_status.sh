@@ -42,3 +42,4 @@ if [[ $PASS_STATUS == *"Closed"* ]]; then
 else
   convert -size 250x200 xc:none pass_conditions.png
 fi
+

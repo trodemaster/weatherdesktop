@@ -113,6 +113,49 @@ if [[ $SCRAPE == 0 ]]; then
     shot-scraper 'https://nwac.us/data-portal/graph/21/' -o "${SCRIPTPATH}/assets/nwac_stevens_observations.png" --selector '#post-146 > div' --wait 8000
     shot-scraper 'https://nwac.us/avalanche-forecast/#/stevens-pass' -o "${SCRIPTPATH}/assets/nwac_stevens_avalanche_forcast.png" --selector '#nac-forecast-container > div > div.nac-card.nac-content-panel.nac-content-panel-tab > div > div.pswipe-gallery > div > div.nac-danger.nac-mb-4' --wait 1000
     shot-scraper 'https://nwac.us' -o "${SCRIPTPATH}/assets/nwac_avalanche_forcast.png" --selector '#danger-map-widget' --wait 1000
+
+    # source url
+    SOURCE_URL="https://wsdot.com/travel/real-time/mountainpasses/stevens"
+
+    # selector path
+    SELECTOR_PATH='#index > div:nth-child(7) > div.full-width.column-container.mountain-pass > div.column-1'
+
+    HTML_TEMP_FILE="${SCRIPTPATH}/assets/wsdot_stevens_pass.html"
+
+    ## save selected html to file
+    shot-scraper html $SOURCE_URL -o "$HTML_TEMP_FILE" --selector "$SELECTOR_PATH" --wait 1000
+
+    # HTML_TEMP_FILE="${SCRIPTPATH}/testfiles/closed_wsdot_stevens_pass.html"
+    # HTML_TEMP_FILE="${SCRIPTPATH}/testfiles/avalanche_wsdot_stevens_pass.html"
+
+    # use pup to extract the conditions
+    PASS_STATUS_EAST=$(cat $HTML_TEMP_FILE | pup 'body > div > div:nth-child(4) > div.conditionValue' text{})
+    PASS_STATUS_WEST=$(cat $HTML_TEMP_FILE | pup 'body > div > div:nth-child(5) > div.conditionValue' text{})
+    PASS_STATUS="Open"
+
+    # if path status contains "Closed" then echo "Closed"
+    if [[ $PASS_STATUS_EAST == *"Closed"* ]]; then
+      PASS_STATUS="Closed"
+      echo "East Closed"
+    else
+      echo "East Open"
+    fi
+
+    # if path status contains "Closed" then echo "Closed"
+    if [[ $PASS_STATUS_WEST == *"Closed"* ]]; then
+      PASS_STATUS="Closed"
+      echo "West Closed"
+    else
+      echo "West Open"
+    fi
+
+    # if the pass is close render the conditions
+    if [[ $PASS_STATUS == *"Closed"* ]]; then
+      PASS_CONDITIONS=$(cat $HTML_TEMP_FILE | pup 'body > div > div:nth-child(6) > div.conditionValue' text{} | sed 's/ \{2,\}/ /g' | tr -d '\n')
+      convert -size 250x200 -background white -fill black -pointsize 14 -gravity center -border 5 -bordercolor white caption:"$PASS_CONDITIONS" "${SCRIPTPATH}/assets/pass_conditions.png"
+    else
+      convert -size 250x200 xc:none "${SCRIPTPATH}/assets/pass_conditions.png"
+    fi
   fi
 fi
 
@@ -159,6 +202,7 @@ if [[ $RENDER == 0 ]]; then
     "$SCRIPT_DIR/assets/stevenspasssnowstake_s.jpg" -geometry +910+1250 -composite \
     "$SCRIPT_DIR/assets/stevens_spbasearea_s.jpg" -geometry +910+1650 -composite \
     "$SCRIPT_DIR/assets/stevenspasscourtyard_s.jpg" -geometry +1600+1250 -composite \
+    "$SCRIPT_DIR/assets/pass_conditions.png" -geometry +3150+420 -composite \
     "$SCRIPT_DIR/rendered/$RENDERED_FILENAME"
   echo "Rendering "$SCRIPT_DIR/rendered/$RENDERED_FILENAME" Completed..."
 fi

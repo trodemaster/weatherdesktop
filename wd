@@ -208,7 +208,7 @@ if [[ $CROP == 0 ]]; then
   echo "croping images..."
   convert "$SCRIPT_DIR/assets/GOES18_north_pacific.jpg" -crop 7200x4050+0+0 -resize "3840>" "$SCRIPT_DIR/assets/background_s.jpg" &
   convert "$SCRIPT_DIR/assets/nwac_avalanche_forcast.png" -crop 400x520+65+110 -resize "100%" "$SCRIPT_DIR/assets/nwac_avalanche_forcast_s.jpg" &
-#  convert "$SCRIPT_DIR/assets/nwac_stevens_avalanche_forcast.png" -crop 1086x380+0+25 -resize "100%" "$SCRIPT_DIR/assets/nwac_stevens_avalanche_forcast_s.jpg" &
+  convert "$SCRIPT_DIR/assets/nwac_stevens_avalanche_forcast.png" -crop 1086x380+0+25 -resize "100%" "$SCRIPT_DIR/assets/nwac_stevens_avalanche_forcast_s.jpg" &
   convert "$SCRIPT_DIR/assets/nwac_stevens_observations.png" -crop 1140x1439+0+0 -resize "75%" "$SCRIPT_DIR/assets/nwac_stevens_observations_s.jpg" &
   convert "$SCRIPT_DIR/assets/weather_gov_hourly_forecast.png" -crop 806x930+0+200 -resize "106%" "$SCRIPT_DIR/assets/weather_gov_hourly_forecast_s.jpg" &
   convert "$SCRIPT_DIR/assets/stevenspasscourtyard.jpg" -crop 1920x1080+0+0 -resize "50%" "$SCRIPT_DIR/assets/stevenspasscourtyard_s.jpg" &
@@ -253,6 +253,7 @@ if [[ $DESKTOP == 0 ]]; then
   if [[ -f "$SCRIPT_DIR/rendered/$RENDERED_FILENAME" ]]; then
     echo "setting desktop to $SCRIPT_DIR/rendered/$RENDERED_FILENAME"
     desktoppr 0 "$SCRIPT_DIR/rendered/$RENDERED_FILENAME"
+    find "${TMPDIR}../C/com.apple.wallpaper.caches/extension-com.apple.wallpaper.extension.image" -name "*.png" -type f -delete
   else
     echo "Rendered file $SCRIPT_DIR/rendered/$RENDERED_FILENAME not found..."
     echo "Run with render and set desktop at the same time"

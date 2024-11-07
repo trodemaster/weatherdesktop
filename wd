@@ -1,4 +1,4 @@
-#!/opt/local/bin/bash
+s#!/opt/local/bin/bash
 
 set -euo pipefail
 IFS=$'\n\t'
@@ -104,9 +104,9 @@ if [[ $DOWNLOAD == 0 ]]; then
   wget --no-check-certificate --retry-connrefused --waitretry=1 --read-timeout=20 --timeout=15 "https://images.wsdot.wa.gov/nc/002vc06300.jpg" -O "$SCRIPT_DIR/assets/wsdot_big_windy.jpg" &
   wget --no-check-certificate --retry-connrefused --waitretry=1 --read-timeout=20 --timeout=15 "https://images.wsdot.wa.gov/nc/002vc06190.jpg" -O "$SCRIPT_DIR/assets/wsdot_w_stevens.jpg" &
   wget --no-check-certificate --retry-connrefused --waitretry=1 --read-timeout=20 --timeout=15 "https://live8p.brownrice.com/cam-images/stevenspasscourtyard.jpg" -O "$SCRIPT_DIR/assets/stevenspasscourtyard.jpg" &
-  wget --no-check-certificate --retry-connrefused --waitretry=1 --read-timeout=20 --timeout=15 "https://cache.snow.com/mtncams/Skyline.jpg" -O "$SCRIPT_DIR/assets/stevens_skyline.jpg" &
+#  wget --no-check-certificate --retry-connrefused --waitretry=1 --read-timeout=20 --timeout=15 "https://cache.snow.com/mtncams/Skyline.jpg" -O "$SCRIPT_DIR/assets/stevens_skyline.jpg" &
   wget --no-check-certificate --retry-connrefused --waitretry=1 --read-timeout=20 --timeout=15 "https://live8p.brownrice.com/cam-images/stevenspasssnowstake.jpg" -O "$SCRIPT_DIR/assets/stevenspasssnowstake.jpg" &
-  wget --no-check-certificate --retry-connrefused --waitretry=1 --read-timeout=20 --timeout=15 "http://cache.snow.com/mtncams/SPBaseArea.jpg" -O "$SCRIPT_DIR/assets/stevens_spbasearea.jpg" &
+#  wget --no-check-certificate --retry-connrefused --waitretry=1 --read-timeout=20 --timeout=15 "http://cache.snow.com/mtncams/SPBaseArea.jpg" -O "$SCRIPT_DIR/assets/stevens_spbasearea.jpg" &
   wget --no-check-certificate --retry-connrefused --waitretry=1 --read-timeout=20 --timeout=15 "https://live8p.brownrice.com/cam-images/stevenspassjupiter.jpg" -O "$SCRIPT_DIR/assets/stevenspassjupiter.jpg" &
 fi
 
@@ -115,39 +115,38 @@ fi
 
 # setup python venv and run shot scraper
 if [[ $SCRAPE == 0 ]]; then
-  if ! [[ -d "${SCRIPT_DIR}/.venv_scrape" ]]; then
-    echo "creating python venv"
-    python3 -m venv "${SCRIPT_DIR}/.venv_scrape"
-    source "${SCRIPT_DIR}/.venv_scrape/bin/activate"
-    pip install --upgrade pip
-    pip install shot-scraper
-    playwright install
+  if ! command -v shot-scraper &> /dev/null; then
+    echo "shot-scraper is not installed. Please pip install shot-scraper"
+    echo "then: shot-scraper install -b webkit"
+    exit 1
+  elif ! command -v playwright &> /dev/null; then
+    echo "playwright is not installed. Please  pip install playwright"
+    exit 1
   else
     echo "scraping sites..."
     # need to add error handling for shot-scraper so that if it fails to grab image a transparent png is used
-    source "${SCRIPT_DIR}/.venv_scrape/bin/activate"
     echo "scraping weather_gov_hourly_forecast.png"
-    if ! shot-scraper 'https://forecast.weather.gov/MapClick.php?lat=47.7456&lon=-121.0892&unit=0&lg=english&FcstType=graphical' -o "${SCRIPTPATH}/assets/weather_gov_hourly_forecast.png" --selector 'body > table:nth-child(6)';then
+    if ! shot-scraper -b webkit 'https://forecast.weather.gov/MapClick.php?lat=47.7456&lon=-121.0892&unit=0&lg=english&FcstType=graphical' -o "${SCRIPTPATH}/assets/weather_gov_hourly_forecast.png" --selector 'body > main > div > table:nth-child(3) > tbody > tr:nth-child(5) > td > table:nth-child(1) > tbody > tr:nth-child(1) > td > a > img';then
       echo "weather_gov_hourly_forecast.png failed"
       convert -size 1x1 xc:none "${SCRIPTPATH}/assets/weather_gov_hourly_forecast.png"
     fi
     echo "scraping weather_gov_extended_forecast.png"
-    if ! shot-scraper 'https://forecast.weather.gov/MapClick.php?lat=47.7456&lon=-121.0892' -o "${SCRIPTPATH}/assets/weather_gov_extended_forecast.png" --selector '#seven-day-forecast';then
+    if ! shot-scraper -b webkit 'https://forecast.weather.gov/MapClick.php?lat=47.7456&lon=-121.0892' -o "${SCRIPTPATH}/assets/weather_gov_extended_forecast.png" --selector '#seven-day-forecast';then
       echo "weather_gov_extended_forecast.png failed"
       convert -size 1x1 xc:none "${SCRIPTPATH}/assets/weather_gov_extended_forecast.png"
     fi
     echo "scraping nwac"
-    if ! shot-scraper 'https://nwac.us/data-portal/graph/21/' -o "${SCRIPTPATH}/assets/nwac_stevens_observations.png" --selector '#post-146 > div' --wait 5000;then
+    if ! shot-scraper -b webkit 'https://nwac.us/data-portal/graph/21/' -o "${SCRIPTPATH}/assets/nwac_stevens_observations.png" --selector '#post-146 > div' --wait 5000;then
       echo "nwac_stevens_observations.png failed"
       convert -size 1x1 xc:none "${SCRIPTPATH}/assets/nwac_stevens_observations.png"
     fi
     echo "scraping nwac avalanche forcast"
-    if ! shot-scraper 'https://nwac.us/avalanche-forecast/#/stevens-pass' -o "${SCRIPTPATH}/assets/nwac_stevens_avalanche_forcast.png" --selector '#nac-forecast-container > div > div.nac-card.nac-content-panel.nac-content-panel-tab > div > div.pswipe-gallery > div > div.nac-danger.nac-mb-4' --wait 1000;then
+    if ! shot-scraper -b webkit 'https://nwac.us/avalanche-forecast/#/stevens-pass' -o "${SCRIPTPATH}/assets/nwac_stevens_avalanche_forcast.png" --selector '#nac-forecast-container > div > div.nac-card.nac-content-panel.nac-content-panel-tab > div > div.pswipe-gallery > div > div.nac-danger.nac-mb-4' --wait 1000;then
       echo "nwac_stevens_avalanche_forcast.png failed"
       convert -size 1x1 xc:none "${SCRIPTPATH}/assets/nwac_stevens_avalanche_forcast.png"
     fi
     echo "scraping nwac avalanche forcast map"
-    if ! shot-scraper 'https://nwac.us' -o "${SCRIPTPATH}/assets/nwac_avalanche_forcast.png" --selector '#danger-map-widget' --wait 1000;then
+    if ! shot-scraper -b webkit 'https://nwac.us' -o "${SCRIPTPATH}/assets/nwac_avalanche_forcast.png" --selector '#danger-map-widget' --wait 1000;then
       echo "nwac_avalanche_forcast.png failed"
       convert -size 1x1 xc:none "${SCRIPTPATH}/assets/nwac_avalanche_forcast.png"
     fi
@@ -210,12 +209,12 @@ if [[ $CROP == 0 ]]; then
   convert "$SCRIPT_DIR/assets/nwac_avalanche_forcast.png" -crop 400x520+65+110 -resize "100%" "$SCRIPT_DIR/assets/nwac_avalanche_forcast_s.jpg" &
   convert "$SCRIPT_DIR/assets/nwac_stevens_avalanche_forcast.png" -crop 1086x380+0+25 -resize "100%" "$SCRIPT_DIR/assets/nwac_stevens_avalanche_forcast_s.jpg" &
   convert "$SCRIPT_DIR/assets/nwac_stevens_observations.png" -crop 1140x1439+0+0 -resize "75%" "$SCRIPT_DIR/assets/nwac_stevens_observations_s.jpg" &
-  convert "$SCRIPT_DIR/assets/weather_gov_hourly_forecast.png" -crop 806x930+0+200 -resize "106%" "$SCRIPT_DIR/assets/weather_gov_hourly_forecast_s.jpg" &
+#  convert "$SCRIPT_DIR/assets/weather_gov_hourly_forecast.png" -crop 806x930+0+200 -resize "100%" "$SCRIPT_DIR/assets/weather_gov_hourly_forecast_s.jpg" &
   convert "$SCRIPT_DIR/assets/stevenspasscourtyard.jpg" -crop 1920x1080+0+0 -resize "50%" "$SCRIPT_DIR/assets/stevenspasscourtyard_s.jpg" &
-  convert "$SCRIPT_DIR/assets/stevens_skyline.jpg" -crop 1920x1080+0+0 -resize "45%" "$SCRIPT_DIR/assets/stevens_skyline_s.jpg" &
-  convert "$SCRIPT_DIR/assets/stevenspassjupiter.jpg" -crop 3840x2160+0+0 -resize "40%" "$SCRIPT_DIR/assets/stevenspassjupiter_s.jpg" &
+#  convert "$SCRIPT_DIR/assets/stevens_skyline.jpg" -crop 1920x1080+0+0 -resize "45%" "$SCRIPT_DIR/assets/stevens_skyline_s.jpg" &
+#  convert "$SCRIPT_DIR/assets/stevenspassjupiter.jpg" -crop 3840x2160+0+0 -resize "40%" "$SCRIPT_DIR/assets/stevenspassjupiter_s.jpg" &
   convert "$SCRIPT_DIR/assets/stevenspasssnowstake.jpg" -crop 1920x1080+0+0 -resize "50%" "$SCRIPT_DIR/assets/stevenspasssnowstake_s.jpg" &
-  convert "$SCRIPT_DIR/assets/stevens_spbasearea.jpg" -crop 1920x1080+0+0 -resize "45%" "$SCRIPT_DIR/assets/stevens_spbasearea_s.jpg" &
+#  convert "$SCRIPT_DIR/assets/stevens_spbasearea.jpg" -crop 1920x1080+0+0 -resize "45%" "$SCRIPT_DIR/assets/stevens_spbasearea_s.jpg" &
   convert "$SCRIPT_DIR/assets/weather_gov_extended_forecast.png" -crop 1146x300+0+100 -resize "100%" "$SCRIPT_DIR/assets/weather_gov_extended_forecast_s.jpg" &
   convert "$SCRIPT_DIR/assets/wsdot_stevens_pass.jpg" -resize "119%" "$SCRIPT_DIR/assets/wsdot_stevens_pass_b.jpg" &
   wait
@@ -229,7 +228,7 @@ if [[ $RENDER == 0 ]]; then
   echo "Rendering..."
   convert -size 3840x2160 xc:skyblue \
     "$SCRIPT_DIR/assets/background_s.jpg" -geometry +0+0 -composite \
-    "$SCRIPT_DIR/assets/weather_gov_hourly_forecast_s.jpg" -geometry +20+1130 -composite \
+    "$SCRIPT_DIR/assets/weather_gov_hourly_forecast.png" -geometry +20+1130 -composite \
     "$SCRIPT_DIR/assets/weather_gov_extended_forecast_s.jpg" -geometry +2680+1860 -composite \
     "$SCRIPT_DIR/assets/nwac_avalanche_forcast_s.jpg" -geometry +3420+420 -composite \
     "$SCRIPT_DIR/assets/nwac_stevens_observations_s.jpg" -geometry +20+20 -composite \
@@ -238,11 +237,9 @@ if [[ $RENDER == 0 ]]; then
     "$SCRIPT_DIR/assets/wsdot_big_windy.jpg" -geometry +1600+20 -composite \
     "$SCRIPT_DIR/assets/wsdot_stevens_pass_b.jpg" -geometry +1950+20 -composite \
     "$SCRIPT_DIR/assets/wsdot_e_stevens_summit.jpg" -geometry +2360+20 -composite \
-    "$SCRIPT_DIR/assets/stevens_skyline_s.jpg" -geometry +1800+1650 -composite \
-    "$SCRIPT_DIR/assets/stevenspassjupiter_s.jpg" -geometry +900+285 -composite \
-    "$SCRIPT_DIR/assets/stevenspasssnowstake_s.jpg" -geometry +910+1250 -composite \
-    "$SCRIPT_DIR/assets/stevens_spbasearea_s.jpg" -geometry +910+1650 -composite \
-    "$SCRIPT_DIR/assets/stevenspasscourtyard_s.jpg" -geometry +1600+1250 -composite \
+    "$SCRIPT_DIR/assets/stevenspassjupiter.jpg" -geometry +900+285 -composite \
+    "$SCRIPT_DIR/assets/stevenspasssnowstake_s.jpg" -geometry +910+1730 -composite \
+    "$SCRIPT_DIR/assets/stevenspasscourtyard_s.jpg" -geometry +1600+1730 -composite \
     "$SCRIPT_DIR/assets/pass_conditions.png" -geometry +3150+420 -composite \
     "$SCRIPT_DIR/rendered/$RENDERED_FILENAME"
   echo "Rendering "$SCRIPT_DIR/rendered/$RENDERED_FILENAME" Completed..."

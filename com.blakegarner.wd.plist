@@ -76,3 +76,8 @@
     <string>staff</string>
 </dict>
 </plist>
+<!-- 
+launchctl bootstrap gui/$UID ~/Library/LaunchAgents/com.blakegarner.wd.plist
+launchctl bootout gui/$UID ~/Library/LaunchAgents/com.blakegarner.wd.plist
+launchctl print gui/$UID/com.blakegarner.wd
+ -->

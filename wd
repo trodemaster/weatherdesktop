@@ -87,6 +87,34 @@ fi
 SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" >/dev/null 2>&1 && pwd)"
 echo $SCRIPT_DIR
 
+# Function to scrape a webpage with fallback
+scrape_with_fallback() {
+  local url="$1"
+  local output_path="$2"
+  local selector="$3"
+  local wait_time="${4:-1000}"
+  
+  echo "Scraping $url"
+  if ! shot-scraper -b webkit "$url" -o "$output_path" --selector "$selector" --wait "$wait_time"; then
+    echo "Failed to scrape $output_path, creating empty image"
+    convert -size 1x1 xc:none "$output_path"
+  fi
+}
+
+# Function to extract HTML with fallback
+extract_html_with_fallback() {
+  local url="$1"
+  local output_path="$2"
+  local selector="$3"
+  local wait_time="${4:-1000}"
+  
+  echo "Extracting HTML from $url"
+  if ! shot-scraper html "$url" -o "$output_path" --selector "$selector" --wait "$wait_time"; then
+    echo "Failed to extract HTML from $url, creating empty file"
+    echo "<div></div>" > "$output_path"
+  fi
+}
+
 # flush assets
 if [[ $FLUSH == 0 ]] && CLEANUP_FILES=$(compgen -G "${SCRIPT_DIR}/assets/*"); then
   for CLEANUP_FILE in $CLEANUP_FILES; do
@@ -124,43 +152,33 @@ if [[ $SCRAPE == 0 ]]; then
     exit 1
   else
     echo "scraping sites..."
-    # need to add error handling for shot-scraper so that if it fails to grab image a transparent png is used
+    # Weather.gov hourly forecast
     echo "scraping weather_gov_hourly_forecast.png"
-    if ! shot-scraper -b webkit 'https://forecast.weather.gov/MapClick.php?lat=47.7456&lon=-121.0892&unit=0&lg=english&FcstType=graphical' -o "${SCRIPTPATH}/assets/weather_gov_hourly_forecast.png" --selector 'body > main > div > table:nth-child(3) > tbody > tr:nth-child(5) > td > table:nth-child(1) > tbody > tr:nth-child(1) > td > a > img';then
-      echo "weather_gov_hourly_forecast.png failed"
-      convert -size 1x1 xc:none "${SCRIPTPATH}/assets/weather_gov_hourly_forecast.png"
-    fi
+    scrape_with_fallback "https://forecast.weather.gov/MapClick.php?lat=47.7456&lon=-121.0892&unit=0&lg=english&FcstType=graphical" "${SCRIPTPATH}/assets/weather_gov_hourly_forecast.png" 'body > main > div > table:nth-child(3) > tbody > tr:nth-child(5) > td > table:nth-child(1) > tbody > tr:nth-child(1) > td > a > img'
+    
+    # Weather.gov extended forecast
     echo "scraping weather_gov_extended_forecast.png"
-    if ! shot-scraper -b webkit 'https://forecast.weather.gov/MapClick.php?lat=47.7456&lon=-121.0892' -o "${SCRIPTPATH}/assets/weather_gov_extended_forecast.png" --selector '#seven-day-forecast';then
-      echo "weather_gov_extended_forecast.png failed"
-      convert -size 1x1 xc:none "${SCRIPTPATH}/assets/weather_gov_extended_forecast.png"
-    fi
+    scrape_with_fallback "https://forecast.weather.gov/MapClick.php?lat=47.7456&lon=-121.0892" "${SCRIPTPATH}/assets/weather_gov_extended_forecast.png" '#seven-day-forecast'
+    
+    # NWAC observations
     echo "scraping nwac"
-    if ! shot-scraper -b webkit 'https://nwac.us/data-portal/graph/21/' -o "${SCRIPTPATH}/assets/nwac_stevens_observations.png" --selector '#post-146 > div' --wait 5000;then
-      echo "nwac_stevens_observations.png failed"
-      convert -size 1x1 xc:none "${SCRIPTPATH}/assets/nwac_stevens_observations.png"
-    fi
+    scrape_with_fallback "https://nwac.us/data-portal/graph/21/" "${SCRIPTPATH}/assets/nwac_stevens_observations.png" '#post-146 > div' 5000
+    
+    # NWAC avalanche forecast
     echo "scraping nwac avalanche forcast"
-    if ! shot-scraper -b webkit 'https://nwac.us/avalanche-forecast/#/stevens-pass' -o "${SCRIPTPATH}/assets/nwac_stevens_avalanche_forcast.png" --selector '#nac-forecast-container > div > div.nac-card.nac-content-panel.nac-content-panel-tab > div > div.pswipe-gallery > div > div.nac-danger.nac-mb-4' --wait 1000;then
-      echo "nwac_stevens_avalanche_forcast.png failed"
-      convert -size 1x1 xc:none "${SCRIPTPATH}/assets/nwac_stevens_avalanche_forcast.png"
-    fi
+    scrape_with_fallback "https://nwac.us/avalanche-forecast/#/stevens-pass" "${SCRIPTPATH}/assets/nwac_stevens_avalanche_forcast.png" '#nac-forecast-container > div > div.nac-card.nac-content-panel.nac-content-panel-tab > div > div.pswipe-gallery > div > div.nac-danger.nac-mb-4'
+    
+    # NWAC avalanche forecast map
     echo "scraping nwac avalanche forcast map"
-    if ! shot-scraper -b webkit 'https://nwac.us' -o "${SCRIPTPATH}/assets/nwac_avalanche_forcast.png" --selector '#danger-map-widget' --wait 1000;then
-      echo "nwac_avalanche_forcast.png failed"
-      convert -size 1x1 xc:none "${SCRIPTPATH}/assets/nwac_avalanche_forcast.png"
-    fi
+    scrape_with_fallback "https://nwac.us" "${SCRIPTPATH}/assets/nwac_avalanche_forcast.png" '#danger-map-widget'
 
-    # source url
+    # WSDOT pass status HTML extraction
     SOURCE_URL="https://wsdot.com/travel/real-time/mountainpasses/stevens"
-
-    # selector path
     SELECTOR_PATH='#index > div:nth-child(7) > div.full-width.column-container.mountain-pass > div.column-1'
-
     HTML_TEMP_FILE="${SCRIPTPATH}/assets/wsdot_stevens_pass.html"
 
     ## save selected html to file
-    shot-scraper html $SOURCE_URL -o "$HTML_TEMP_FILE" --selector "$SELECTOR_PATH" --wait 1000
+    extract_html_with_fallback "$SOURCE_URL" "$HTML_TEMP_FILE" "$SELECTOR_PATH" 1000
 
     # HTML_TEMP_FILE="${SCRIPTPATH}/testfiles/closed_wsdot_stevens_pass.html"
     # HTML_TEMP_FILE="${SCRIPTPATH}/testfiles/avalanche_wsdot_stevens_pass.html"
@@ -249,7 +267,7 @@ fi
 if [[ $DESKTOP == 0 ]]; then
   if [[ -f "$SCRIPT_DIR/rendered/$RENDERED_FILENAME" ]]; then
     echo "setting desktop to $SCRIPT_DIR/rendered/$RENDERED_FILENAME"
-    desktoppr 0 "$SCRIPT_DIR/rendered/$RENDERED_FILENAME"
+    desktoppr "$SCRIPT_DIR/rendered/$RENDERED_FILENAME"
     find "${TMPDIR}../C/com.apple.wallpaper.caches/extension-com.apple.wallpaper.extension.image" -name "*.png" -type f -delete
   else
     echo "Rendered file $SCRIPT_DIR/rendered/$RENDERED_FILENAME not found..."

@@ -131,11 +131,11 @@ if [[ $DOWNLOAD == 0 ]]; then
   wget --no-check-certificate --retry-connrefused --waitretry=1 --read-timeout=20 --timeout=15 "https://images.wsdot.wa.gov/nc/002vc06458.jpg" -O "$SCRIPT_DIR/assets/wsdot_e_stevens_summit.jpg" &
   wget --no-check-certificate --retry-connrefused --waitretry=1 --read-timeout=20 --timeout=15 "https://images.wsdot.wa.gov/nc/002vc06300.jpg" -O "$SCRIPT_DIR/assets/wsdot_big_windy.jpg" &
   wget --no-check-certificate --retry-connrefused --waitretry=1 --read-timeout=20 --timeout=15 "https://images.wsdot.wa.gov/nc/002vc06190.jpg" -O "$SCRIPT_DIR/assets/wsdot_w_stevens.jpg" &
-  wget --no-check-certificate --retry-connrefused --waitretry=1 --read-timeout=20 --timeout=15 "https://live8p.brownrice.com/cam-images/stevenspasscourtyard.jpg" -O "$SCRIPT_DIR/assets/stevenspasscourtyard.jpg" &
+  wget --no-check-certificate --retry-connrefused --waitretry=1 --read-timeout=20 --timeout=15 "https://streamer8.brownrice.com/cam-images/stevenspasscourtyard.jpg" -O "$SCRIPT_DIR/assets/stevenspasscourtyard.jpg" &
 #  wget --no-check-certificate --retry-connrefused --waitretry=1 --read-timeout=20 --timeout=15 "https://cache.snow.com/mtncams/Skyline.jpg" -O "$SCRIPT_DIR/assets/stevens_skyline.jpg" &
-  wget --no-check-certificate --retry-connrefused --waitretry=1 --read-timeout=20 --timeout=15 "https://live8p.brownrice.com/cam-images/stevenspasssnowstake.jpg" -O "$SCRIPT_DIR/assets/stevenspasssnowstake.jpg" &
+  wget --no-check-certificate --retry-connrefused --waitretry=1 --read-timeout=20 --timeout=15 "https://streamer8.brownrice.com/cam-images/stevenspasssnowstake.jpg" -O "$SCRIPT_DIR/assets/stevenspasssnowstake.jpg" &
 #  wget --no-check-certificate --retry-connrefused --waitretry=1 --read-timeout=20 --timeout=15 "http://cache.snow.com/mtncams/SPBaseArea.jpg" -O "$SCRIPT_DIR/assets/stevens_spbasearea.jpg" &
-  wget --no-check-certificate --retry-connrefused --waitretry=1 --read-timeout=20 --timeout=15 "https://live8p.brownrice.com/cam-images/stevenspassjupiter.jpg" -O "$SCRIPT_DIR/assets/stevenspassjupiter.jpg" &
+  wget --no-check-certificate --retry-connrefused --waitretry=1 --read-timeout=20 --timeout=15 "https://streamer8.brownrice.com/cam-images/stevenspassjupiter.jpg" -O "$SCRIPT_DIR/assets/stevenspassjupiter.jpg" &
 fi
 
 # wait for downloads to complete, useful for debugging

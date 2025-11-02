@@ -38,8 +38,8 @@ fi
 # if the pass is close render the conditions
 if [[ $PASS_STATUS == *"Closed"* ]]; then
   PASS_CONDITIONS=$(cat $HTML_TEMP_FILE | pup 'body > div > div:nth-child(6) > div.conditionValue' text{} | sed 's/ \{2,\}/ /g' | tr -d '\n')
-  convert -size 250x200 -background white -fill black -pointsize 14 -gravity center -border 5 -bordercolor white caption:"$PASS_CONDITIONS" pass_conditions.png
+  convert -size 250x200 -background white -fill black -pointsize 14 -gravity center -border 5 -bordercolor white caption:"$PASS_CONDITIONS" assets/pass_conditions.png
 else
-  convert -size 250x200 xc:none pass_conditions.png
+  convert -size 250x200 xc:none assets/pass_conditions.png
 fi
 

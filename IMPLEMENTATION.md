@@ -1,200 +1,462 @@
-# Weather Desktop Go Implementation Summary
+# Implementation Details
 
-## Completed Implementation
+Technical documentation for developers and contributors.
 
-Successfully ported the bash `wd` script to Go using **only standard library and golang.org/x packages** as requested.
+## Architecture
 
-### Recent Enhancements
+### Hybrid Docker + Host Design
 
-- **Lock File System** - Prevents concurrent production runs
-- **Test Mode** - Debug/scrape-target runs bypass lock safely
-- **Enhanced Debug** - Smart wait, verbose logging, target filtering
-- **Makefile** - Auto-detects OS/arch for builds
+The tool uses a hybrid architecture:
+- **Host binary** (`wd`): Orchestrates Docker and sets macOS desktop wallpaper (CGO)
+- **Container** (`wd-worker`): Handles web scraping, downloads, and image processing
 
-### ✅ All Phases Completed
+This design isolates browser automation (Playwright + WebKit) in a container while keeping macOS-specific desktop setting on the host.
 
-1. **Setup** ✅
-   - Go module initialized
-   - Directory structure created
-   - Safari WebDriver package copied from safari-driver-mcp
-   - Flag-based CLI implemented (matching bash script)
+```
+┌─────────────────────────────────────────────────────────┐
+│  macOS Host                                             │
+│  ┌───────────────────────────────────────────────────┐  │
+│  │  wd binary (orchestrates Docker + sets wallpaper) │  │
+│  └──────────────────┬────────────────────────────────┘  │
+│                     │                                    │
+│  ┌──────────────────▼──────────────────────────────┐    │
+│  │  Docker Compose v2                              │    │
+│  │  ┌────────────────────────────────────────────┐ │    │
+│  │  │  wd-worker container                       │ │    │
+│  │  │  ┌──────────────────────────────────────┐  │ │    │
+│  │  │  │  Playwright-Go + WebKit              │  │ │    │
+│  │  │  │  - Web scraping                      │  │ │    │
+│  │  │  │  - Image downloads                   │  │ │    │
+│  │  │  │  - Image cropping/resizing           │  │ │    │
+│  │  │  │  - Composite rendering               │  │ │    │
+│  │  │  └──────────────────────────────────────┘  │ │    │
+│  │  └────────────────────────────────────────────┘ │    │
+│  └─────────────────────────────────────────────────┘    │
+│                                                          │
+│  Shared Volumes:                                         │
+│  ./assets   ←→  /app/assets   (scraped/downloaded)      │
+│  ./rendered ←→  /app/rendered (final composites)        │
+└─────────────────────────────────────────────────────────┘
+```
 
-2. **Asset Manager** ✅
-   - Centralized configuration for all assets
-   - URLs, paths, crop coordinates, and composite layout
-   - Matches bash script lines 128-263
+### Why Docker?
 
-3. **Downloader** ✅
-   - Concurrent HTTP downloads with goroutines
-   - Retry logic with exponential backoff
-   - Fallback to 1x1 transparent PNG on failure
-   - Downloads 9 image sources
+**Problems Solved:**
+1. **True Headless Mode**: Playwright WebKit supports genuine headless operation (unlike Safari WebDriver)
+2. **Isolated Environment**: Self-contained browser binaries, consistent dependencies
+3. **Simpler Process Management**: Docker Compose handles lifecycle (no manual daemon startup)
+4. **Better Concurrency**: Container isolation eliminates need for lock files
 
-4. **Safari Scraper** ✅
-   - Uses Safari WebDriver (copied from safari-driver-mcp)
-   - **Headless by default** - browser hidden during scraping
-   - **Debug mode** - use `-debug` flag to show browser window
-   - Screenshots of 5 web pages
-   - HTML extraction for WSDOT pass status
-   - Fallback to empty images on error
+**Trade-offs:**
+- ✅ Isolated execution environment
+- ✅ Easy dependency management
+- ✅ Consistent across machines
+- ❌ Additional Docker Desktop requirement
+- ❌ ~500MB memory overhead
 
-5. **Image Processor** ✅
-   - Crop using `image.SubImage()`
-   - Resize using `golang.org/x/image/draw.CatmullRom`
-   - Processes 8 assets with various crop/resize params
-   - No ImageMagick needed!
+## Migration from Safari WebDriver
 
-6. **Text Renderer** ✅
-   - Uses `golang.org/x/image/font` for text drawing
-   - Word wrapping and centering
-   - Renders pass conditions warnings
-   - Creates transparent images when pass is open
+### Previous Architecture
 
-7. **Compositor** ✅
-   - Uses stdlib `image/draw.Draw()` for layering
-   - 3840x2160 canvas with sky blue background
-   - 15 layers at precise positions
-   - No ImageMagick needed!
+**Before:** Single `wd` binary using Safari WebDriver for scraping
+- Required `safaridriver` running on host
+- No true headless mode (window minimization workaround)
+- Lock file needed to prevent concurrent runs
+- System-level dependency complexity
 
-8. **HTML Parser** ✅
-   - Uses `golang.org/x/net/html` for parsing
-   - Extracts WSDOT pass status (East/West)
-   - Parses conditions text
-   - No goquery dependency!
+### Current Architecture
 
-9. **Desktop Setter** ✅
-   - CGO with Objective-C (Option 3 as requested)
-   - Direct NSWorkspace API calls
-   - Sets wallpaper on all screens
-   - Clears wallpaper cache
+**After:** Hybrid architecture with `wd` host orchestrator + `wd-worker` container (Playwright/WebKit)
+- True headless mode
+- No manual daemon startup
+- No lock file needed (container isolation)
+- Better reliability and reproducibility
 
-10. **Full Pipeline** ✅
-    - All phases integrated in main.go
-    - Flag-based execution (no flags = run all)
-    - Proper error handling with logging
-    - CDN copy support
+### Code Changes
 
-11. **Lock File** ✅
-    - PID-based lock in `$TMPDIR/wd.lock`
-    - Prevents concurrent production runs
-    - Stale lock detection (checks if PID is running)
-    - Test mode bypasses lock (safe for debugging)
-    - Unique test filenames (`hud-TEST-*.jpg`)
+**Removed Components:**
+- `pkg/webdriver/` - Safari WebDriver client
+- `pkg/scraper/` - Safari-based scraper
+- `pkg/lockfile/` - Lock file management (no longer needed)
 
-## Key Technical Achievements
+**New Components:**
+- `pkg/playwright/scraper.go` - Playwright WebKit automation
+- `pkg/docker/client.go` - Docker Compose orchestration
+- `cmd/wd-worker/main.go` - Container entry point
+- `Dockerfile` - Container image definition
+- `compose.yaml` - Docker Compose v2 configuration
+
+**Modified Components:**
+- `cmd/wd/main.go` - Now orchestrates Docker instead of direct execution
+- `Makefile` - Added Docker management targets
+
+## Docker Configuration
+
+### compose.yaml
+
+```yaml
+services:
+  wd-worker:
+    build:
+      context: .
+      dockerfile: Dockerfile
+    container_name: wd-worker
+    volumes:
+      - ./assets:/app/assets
+      - ./rendered:/app/rendered
+    working_dir: /app
+    init: true                    # Tini for process management
+    restart: unless-stopped
+    environment:
+      - TZ=America/Los_Angeles    # PST timezone for filenames
+    command: sh -c "while true; do sleep 3600; done"  # Keep running
+```
+
+**Key Points:**
+- **Persistent container**: Stays running to avoid startup overhead
+- **Volume mounts**: Share `assets/` and `rendered/` directories with host
+- **init: true**: Uses Docker's built-in Tini for signal handling and zombie reaping
+- **Timezone**: Set to PST for consistent filename timestamps
+
+### Dockerfile
+
+```dockerfile
+FROM ubuntu:24.04
+
+# Install Go 1.23.3
+RUN apt update && apt install -y wget ca-certificates && \
+    wget -q https://go.dev/dl/go1.23.3.linux-amd64.tar.gz && \
+    tar -C /usr/local -xzf go1.23.3.linux-amd64.tar.gz && \
+    rm go1.23.3.linux-amd64.tar.gz
+
+ENV PATH=$PATH:/usr/local/go/bin
+
+WORKDIR /app
+
+# Install Playwright and WebKit
+RUN go run github.com/playwright-community/playwright-go/cmd/playwright@latest install --with-deps webkit
+
+# Install CA certificates for TLS
+RUN update-ca-certificates && \
+    wget -q -O /usr/local/share/ca-certificates/rapidssl-tls-rsa-ca-g1.crt \
+    https://cacerts.digicert.com/RapidSSLTLSRSACAG1.crt.pem && \
+    chmod 644 /usr/local/share/ca-certificates/rapidssl-tls-rsa-ca-g1.crt && \
+    update-ca-certificates
+
+# Build worker binary
+COPY go.mod go.sum ./
+RUN go mod download
+COPY . .
+RUN CGO_ENABLED=0 GOOS=linux go build -o wd-worker ./cmd/wd-worker/main.go
+
+ENTRYPOINT ["/app/wd-worker"]
+```
+
+**Key Points:**
+- **Ubuntu 24.04**: Latest LTS base image
+- **Playwright installation**: Installs WebKit browser and system dependencies via `--with-deps`
+- **TLS certificates**: Installs RapidSSL intermediate CA for `brownrice.com` downloads
+- **Static binary**: `CGO_ENABLED=0` for portability
+
+## Command Flow
+
+### Example: Full Pipeline (`./wd`)
+
+1. **Host `wd` binary** checks Docker container status
+2. If not running, starts `wd-worker` container via Docker Compose
+3. Executes commands in container via `docker compose exec`:
+   - `wd-worker scrape` - Playwright WebKit scraping
+   - `wd-worker download` - HTTP image downloads
+   - `wd-worker crop` - Image processing
+   - `wd-worker render` - Composite generation
+4. **Host `wd` binary** reads rendered image from shared volume
+5. Uses CGO to set macOS desktop wallpaper
+
+### Volume Mounts
+
+**`./assets ↔ /app/assets`**
+- Downloaded images (satellite, webcams)
+- Scraped screenshots (forecasts, avalanche data)
+- Processed/cropped images
+
+**`./rendered ↔ /app/rendered`**
+- Final composite images with timestamps (`hud-YYMMDD-HHMM.jpg`)
+
+## Scraping Implementation
+
+### Playwright Configuration
+
+**Headless Mode:**
+- Always runs headless in Docker (`Headless: playwright.Bool(true)`)
+- Debug mode shows browser logs but not GUI (no X11 forwarding)
+
+**Timeouts:**
+- Page navigation: 10 seconds
+- Element screenshot: 10 seconds
+- Network requests: 10 seconds (via downloader)
+
+**Wait Strategy:**
+- Uses `domcontentloaded` for NWAC sites (React apps)
+- Uses `networkidle` for static sites
+
+### Scrape Targets
+
+**Weather.gov Hourly Forecast:**
+- Selector: `img[src*="meteograms/Plotter.php"]`
+- Wait time: 5000ms
+- Output: 800x870px meteogram image
+
+**Weather.gov Extended Forecast:**
+- Selector: `#seven-day-forecast`
+- Wait time: 1000ms
+- Output: Complete 7-day forecast panel
+
+**NWAC Sites:**
+- Wait time: 15000ms (JavaScript-heavy React apps)
+- Navigation strategy: `domcontentloaded` (don't wait for network idle)
+- Selectors configured per target in `pkg/assets/manager.go`
+
+**WSDOT Pass Status:**
+- Selector: `#index > div:nth-child(7) > div.full-width.column-container.mountain-pass > div.column-1`
+- Type: HTML extraction (not screenshot)
+- Parsed for pass conditions text
+
+## Image Processing
+
+### Downloader
+
+- **Concurrent downloads**: Uses goroutines for parallel HTTP requests
+- **Retry logic**: Exponential backoff on failures
+- **Fallback**: Creates 1x1 transparent PNG on failure
+- **TLS**: Uses system CA certificates loaded from `/etc/ssl/certs/ca-certificates.crt`
+- **Timeout**: 10 seconds per request
+
+### Processor
+
+- **Cropping**: Uses `image.SubImage()` for precise region extraction
+- **Resizing**: Uses `golang.org/x/image/draw.CatmullRom` for high-quality scaling
+- **No ImageMagick**: Pure Go implementation
+
+### Compositor
+
+- **Canvas**: 3840x2160 (4K) sky blue background
+- **Layering**: Uses stdlib `image/draw.Draw()` for compositing
+- **15 layers**: Positioned at precise coordinates from `pkg/assets/manager.go`
+
+### Text Renderer
+
+- **Font**: Uses `golang.org/x/image/font` for text drawing
+- **Word wrapping**: Custom implementation for pass conditions
+- **Centering**: Calculates text bounds for alignment
+
+## Desktop Setting
+
+### macOS Implementation
+
+**CGO with Objective-C:**
+- Direct NSWorkspace API calls (`[[NSWorkspace sharedWorkspace] setDesktopImageURL:forScreen:options:error:]`)
+- Sets wallpaper on all screens
+- Clears wallpaper cache for immediate update
+
+**Host-only:**
+- Desktop setting must run on macOS host (cannot use Docker)
+- CGO requires Xcode Command Line Tools
+
+### Filename Handling
+
+- Container generates filenames with PST timezone (`hud-YYMMDD-HHMM.jpg`)
+- Host finds most recent rendered file using `findMostRecentRendered()`
+- Ensures correct file is used for desktop setting even if timing differs
+
+## Performance
+
+### Container Startup
+
+- **Cold start** (first build): ~5-10 minutes (downloads WebKit)
+- **Warm start** (cached image): ~2-3 seconds
+- **Exec commands** (container running): <1 second overhead
+
+**Optimization**: Keep container running between executions.
+
+### Memory Usage
+
+- Docker Desktop: ~400MB baseline
+- `wd-worker` container: ~500MB-1GB
+- `wd` binary: ~20MB
+- **Total: ~920MB-1.4GB**
+
+### Pipeline Execution
+
+- **Full pipeline**: ~1-2 minutes (network dependent)
+- **Scraping**: ~30-60 seconds (depends on site response)
+- **Downloads**: ~5-10 seconds (concurrent)
+- **Processing**: ~1-2 seconds
+- **Rendering**: ~1-2 seconds
+
+## Development Workflow
+
+### Making Changes
+
+**Worker code** (`cmd/wd-worker/`, `pkg/playwright/`, etc.):
+```bash
+# Edit files
+vim pkg/playwright/scraper.go
+
+# Rebuild container
+make docker-build
+
+# Restart container
+make docker-restart
+
+# Test
+./wd -s -debug
+```
+
+**Host code** (`cmd/wd/`, `pkg/desktop/`, etc.):
+```bash
+# Edit files
+vim cmd/wd/main.go
+
+# Rebuild host binary
+make build
+
+# Test
+./wd -debug
+```
+
+**Full rebuild:**
+```bash
+make rebuild  # Builds Docker image + host binary
+```
+
+### Testing
+
+**Individual phases:**
+```bash
+./wd -s        # Scrape only
+./wd -d        # Download only
+./wd -c        # Crop only
+./wd -r        # Render only
+./wd -p        # Set desktop only
+```
+
+**Debug mode:**
+```bash
+./wd -s -debug                    # Scrape with debug logging
+./wd -s -scrape-target "NWAC" -debug  # Test specific target
+```
+
+**Manual container testing:**
+```bash
+make docker-shell
+# Inside container:
+/app $ wd-worker scrape --debug
+/app $ exit
+```
+
+## Troubleshooting
+
+### Docker Issues
+
+**Container not starting:**
+```bash
+# Check Docker is running
+docker info
+
+# View logs
+make docker-logs
+
+# Restart
+make docker-restart
+```
+
+**Playwright failed to launch:**
+```bash
+# Rebuild with clean slate
+docker compose down
+docker compose build --no-cache
+docker compose up -d
+```
+
+**Volume mount issues:**
+```bash
+# Check Docker Desktop settings
+# Settings > Resources > File Sharing
+# Ensure project directory is allowed
+```
+
+### Scraping Issues
+
+**Timeout errors:**
+- Check network connectivity
+- Verify target URLs are accessible
+- Increase wait times in `pkg/assets/manager.go` if needed
+
+**Selector failures:**
+- Use debug mode to see what's being captured
+- Check browser logs in container: `make docker-logs`
+- Update selectors in `pkg/assets/manager.go`
+
+**TLS certificate errors:**
+- CA certificates are installed in Dockerfile
+- If new site fails, add its CA certificate to Dockerfile
+
+### Build Issues
+
+**CGO errors (host binary):**
+```bash
+# Install Xcode Command Line Tools
+xcode-select --install
+```
+
+**Go version mismatch:**
+```bash
+# Check go.mod requires Go 1.23
+# Update Dockerfile if needed
+```
+
+## Dependencies
+
+### Host Binary (`cmd/wd`)
+- `golang.org/x/image/draw` - Image scaling
+- `golang.org/x/image/font` - Text rendering
+- `golang.org/x/net/html` - HTML parsing
+- CGO - macOS Cocoa APIs
+
+### Container (`cmd/wd-worker`)
+- `github.com/playwright-community/playwright-go` - Browser automation
+- WebKit browser binaries (installed in Docker image)
+- Standard library packages for image processing
 
 ### Standard Library Focus
-- **NO** third-party dependencies except:
-  - `golang.org/x/image` (extended stdlib)
-  - `golang.org/x/net` (extended stdlib)
 
-### Replaced External Tools
-| Bash Tool | Go Replacement |
-|-----------|----------------|
-| `wget` | `net/http.Client` |
-| `shot-scraper` | Safari WebDriver (Go) |
-| `pup` | `x/net/html` parser |
-| `jq` | Native Go structs |
-| `ImageMagick convert` | `image/draw` + `x/image/draw` |
-| `desktoppr` | CGO NSWorkspace |
+**Replaced external tools:**
+- `wget` → `net/http.Client`
+- `shot-scraper` → Playwright-Go
+- `pup` → `x/net/html` parser
+- `jq` → Native Go structs
+- `ImageMagick convert` → `image/draw` + `x/image/draw`
+- `desktoppr` → CGO NSWorkspace
 
-### Performance Improvements
-- Concurrent downloads with goroutines
-- Single Safari session reused for all scrapes
-- Compiled binary (vs interpreted bash/Python)
-- No subprocess spawning overhead
+## Future Enhancements
 
-## File Manifest
+### Short Term
+- Health check endpoint for container
+- Graceful shutdown handling
+- Configurable timeout and retry logic
 
-```
-✅ cmd/wd/main.go              (370 lines) - CLI & pipeline with lock
-✅ pkg/assets/manager.go        (180 lines) - Configuration
-✅ pkg/downloader/downloader.go (130 lines) - HTTP downloads
-✅ pkg/scraper/scraper.go       (400 lines) - Safari scraping + debug
-✅ pkg/parser/parser.go         (120 lines) - HTML parsing
-✅ pkg/image/processor.go       (160 lines) - Crop & resize
-✅ pkg/image/text.go            (150 lines) - Text rendering
-✅ pkg/image/compositor.go      (100 lines) - Compositing
-✅ pkg/desktop/macos.go         (90 lines)  - Desktop setting
-✅ pkg/lockfile/lockfile.go     (90 lines)  - Lock file management
-✅ pkg/webdriver/*              (copied)    - WebDriver client
-✅ Makefile                     - Build automation
-✅ go.mod                       - Dependencies
-✅ README.md                    - User documentation
-✅ DEBUG_GUIDE.md               - Debug documentation
-✅ LOCKFILE.md                  - Lock file documentation
-✅ IMPLEMENTATION.md            - This file
-```
+### Medium Term
+- Support multiple browser engines (Chromium, Firefox)
+- Parallel scraping with multiple containers
+- Metrics and monitoring
 
-## Build & Test
+### Long Term
+- Cloud deployment (AWS ECS, Google Cloud Run)
+- CI/CD integration (GitHub Actions)
+- Historical data tracking
 
-```bash
-# Build successful ✅
-go build -o wd ./cmd/wd
+## See Also
 
-# Binary created ✅
-./wd -h  # Shows help
-
-# All imports resolved ✅
-# All packages compile ✅
-# CGO compiles ✅
-```
-
-## Usage Examples
-
-```bash
-# Full pipeline (default - headless)
-./wd
-
-# Individual phases
-./wd -s  # Scrape only (headless)
-./wd -d  # Download only
-./wd -c  # Crop only
-./wd -r  # Render only
-./wd -p  # Set desktop only
-./wd -f  # Flush assets
-
-# Combined
-./wd -d -c -r  # Download, crop, render
-
-# Debug mode (show Safari browser)
-./wd -s -debug      # Scrape with visible browser
-./wd -debug         # Full pipeline with visible browser
-```
-
-## Requirements Met
-
-- ✅ Standard library focus (as requested)
-- ✅ Safari WebDriver instead of Chrome (as requested)
-- ✅ CGO desktop setter (Option 3, as requested)
-- ✅ Flag-based CLI (stdlib flag, as requested)
-- ✅ No cobra (as requested)
-- ✅ No chromedp (as requested)
-- ✅ No goquery (as requested)
-- ✅ No third-party image libraries (as requested)
-
-## Next Steps for Testing
-
-1. Start Safari WebDriver:
-   ```bash
-   safaridriver --port=4444 &
-   ```
-
-2. Run the tool:
-   ```bash
-   ./wd
-   ```
-
-3. Check output:
-   - `assets/` should contain downloaded images
-   - `rendered/` should contain final composite
-   - Desktop wallpaper should be set
-
-## Notes
-
-- Safari WebDriver required for scraping
-- macOS required for desktop setting (Cocoa APIs)
-- All image processing uses pure Go (no ImageMagick)
-- Fallback handling for offline/failed sources
-- Maintains original bash script behavior
-
+- [README.md](README.md) - User documentation
+- [Docker Compose v2 Documentation](https://docs.docker.com/compose/)
+- [Playwright-Go Documentation](https://pkg.go.dev/github.com/playwright-community/playwright-go)

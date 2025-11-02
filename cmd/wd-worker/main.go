@@ -6,6 +6,7 @@ import (
 	"log"
 	"os"
 	"path/filepath"
+	"strings"
 	"time"
 
 	"github.com/trodemaster/weatherdesktop/pkg/assets"
@@ -137,14 +138,52 @@ func runRender() error {
 	
 	log.Printf("Rendering composite image: %s", renderedFilename)
 	
-	// Parse WSDOT HTML for pass status
+	// Parse WSDOT HTML for pass status and render status graphic
 	wsdotHTML := filepath.Join(mgr.AssetsDir, "wsdot_stevens_pass.html")
 	prsr := parser.New()
 	passStatus, err := prsr.ParseWSDOTPassStatus(wsdotHTML)
 	if err != nil {
 		log.Printf("Warning: Failed to parse WSDOT status: %v", err)
+		// Create empty/transparent image if parsing fails
+		passConditionsPath := mgr.GetPassConditionsImagePath()
+		if err := pkgimage.CreateEmptyImage(250, 200, passConditionsPath); err != nil {
+			log.Printf("Warning: Failed to create empty pass conditions image: %v", err)
+		}
 	} else {
-		log.Printf("Pass is %s", passStatus.East)
+		// Normalize status values for display
+		eastStatus := passStatus.East
+		westStatus := passStatus.West
+		
+		// Check if status indicates "Open" (no restrictions, etc.)
+		if strings.Contains(strings.ToLower(eastStatus), "no restrictions") {
+			eastStatus = "Open"
+		}
+		if strings.Contains(strings.ToLower(westStatus), "no restrictions") {
+			westStatus = "Open"
+		}
+		
+		log.Printf("Pass Status - East: %s, West: %s", eastStatus, westStatus)
+		
+		// Create updated PassStatus with normalized values
+		normalizedStatus := &parser.PassStatus{
+			East:       eastStatus,
+			West:       westStatus,
+			IsClosed:   passStatus.IsClosed,
+			Conditions: passStatus.Conditions,
+		}
+		
+		// Render pass status graphic
+		passConditionsPath := mgr.GetPassConditionsImagePath()
+		textRenderer := pkgimage.NewTextRenderer()
+		if err := textRenderer.RenderPassStatus(normalizedStatus, 250, 200, passConditionsPath); err != nil {
+			log.Printf("Warning: Failed to render pass status graphic: %v", err)
+			// Fallback to empty image
+			if err := pkgimage.CreateEmptyImage(250, 200, passConditionsPath); err != nil {
+				log.Printf("Warning: Failed to create empty pass conditions image: %v", err)
+			}
+		} else {
+			log.Printf("Pass status graphic rendered: %s", passConditionsPath)
+		}
 	}
 	
 	// Composite the image

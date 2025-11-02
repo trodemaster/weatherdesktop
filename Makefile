@@ -33,13 +33,13 @@ build:
 	@echo "✓ Built: $(BUILD_DIR)/$(BINARY_NAME)"
 
 # Clean build artifacts
+# Note: Does NOT delete rendered/*.jpg files (they are archived images)
 .PHONY: clean
 clean:
 	@echo "Cleaning..."
 	@rm -f $(BUILD_DIR)/$(BINARY_NAME)
 	@rm -rf assets/*.png assets/*.jpg assets/*.html
-	@rm -rf rendered/*.jpg
-	@echo "✓ Cleaned"
+	@echo "✓ Cleaned (rendered images preserved)"
 
 # Docker targets
 .PHONY: docker-build

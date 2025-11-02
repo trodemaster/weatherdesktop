@@ -41,8 +41,8 @@ RUN wget -q -O /usr/local/share/ca-certificates/rapidssl-tls-rsa-ca-g1.crt \
 
 # Copy source code
 COPY . .
-
-# Build worker binary (no CGO needed in container)
+# Explicitly copy fonts directory if it exists
+COPY fonts/ /app/fonts/
 RUN CGO_ENABLED=0 go build -o wd-worker ./cmd/wd-worker
 
 # Create directories

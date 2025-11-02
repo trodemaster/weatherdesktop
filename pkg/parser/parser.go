@@ -46,34 +46,102 @@ func (p *Parser) ParseWSDOTPassStatus(htmlPath string) (*PassStatus, error) {
 		West: "Open",
 	}
 	
-	// Find condition value divs
-	// We're looking for div elements with class "conditionValue"
-	conditions := p.findConditionValues(doc)
+	// Find all condition divs with their labels and values
+	conditions := p.findConditionsWithLabels(doc)
 	
-	// Based on the original bash script:
-	// div:nth-child(4) > div.conditionValue = East status
-	// div:nth-child(5) > div.conditionValue = West status
-	// div:nth-child(6) > div.conditionValue = Conditions text
+	// Debug: log all conditions found
+	// fmt.Printf("DEBUG: Found %d conditions\n", len(conditions))
+	// for i, cond := range conditions {
+	// 	fmt.Printf("DEBUG: Condition %d - Label: %q, Value: %q\n", i, cond.label, cond.value)
+	// }
 	
-	if len(conditions) >= 2 {
-		status.East = strings.TrimSpace(conditions[0])
-		status.West = strings.TrimSpace(conditions[1])
+	// Look for "Travel eastbound" and "Travel westbound" labels
+	for _, cond := range conditions {
+		label := strings.ToLower(cond.label)
+		value := strings.TrimSpace(cond.value)
+		
+		// Debug: log what we're finding
+		// fmt.Printf("DEBUG: Found condition - Label: %q, Value: %q\n", cond.label, value)
+		
+		if strings.Contains(label, "travel") && strings.Contains(label, "eastbound") {
+			status.East = value
+			if strings.Contains(value, "Closed") || strings.Contains(value, "closed") {
+				status.IsClosed = true
+			}
+		}
+		if strings.Contains(label, "travel") && strings.Contains(label, "westbound") {
+			status.West = value
+			if strings.Contains(value, "Closed") || strings.Contains(value, "closed") {
+				status.IsClosed = true
+			}
+		}
+		if strings.Contains(label, "conditions") && status.IsClosed {
+			status.Conditions = p.cleanConditionsText(value)
+		}
 	}
 	
-	// Check if pass is closed
-	if strings.Contains(status.East, "Closed") {
-		status.IsClosed = true
-	}
-	if strings.Contains(status.West, "Closed") {
-		status.IsClosed = true
-	}
-	
-	// Get conditions text if closed
-	if status.IsClosed && len(conditions) >= 3 {
-		status.Conditions = p.cleanConditionsText(conditions[2])
-	}
 	
 	return status, nil
+}
+
+// conditionPair represents a label-value pair
+type conditionPair struct {
+	label string
+	value string
+}
+
+// findConditionsWithLabels finds conditionLabel and conditionValue pairs
+// These are siblings within a parent div with class "condition"
+func (p *Parser) findConditionsWithLabels(n *html.Node) []conditionPair {
+	var results []conditionPair
+	
+	var traverse func(*html.Node)
+	traverse = func(node *html.Node) {
+		if node.Type == html.ElementNode && node.Data == "div" {
+			// Check if this is a parent div with class "condition"
+			var isConditionParent bool
+			for _, attr := range node.Attr {
+				if attr.Key == "class" && strings.Contains(attr.Val, "condition") {
+					isConditionParent = true
+					break
+				}
+			}
+			
+			if isConditionParent {
+				// Look for conditionLabel and conditionValue children
+				var label, value string
+				for child := node.FirstChild; child != nil; child = child.NextSibling {
+					if child.Type == html.ElementNode && child.Data == "div" {
+						for _, attr := range child.Attr {
+							if attr.Key == "class" {
+								if strings.Contains(attr.Val, "conditionLabel") {
+									label = p.extractText(child)
+								}
+								if strings.Contains(attr.Val, "conditionValue") {
+									value = p.extractText(child)
+								}
+							}
+						}
+					}
+				}
+				
+				if label != "" && value != "" {
+					results = append(results, conditionPair{
+						label: strings.TrimSpace(label),
+						value: strings.TrimSpace(value),
+					})
+				}
+			}
+		}
+		
+		// Traverse children
+		for child := node.FirstChild; child != nil; child = child.NextSibling {
+			traverse(child)
+		}
+	}
+	
+	traverse(n)
+	return results
 }
 
 // findConditionValues finds all text content from divs with class "conditionValue"

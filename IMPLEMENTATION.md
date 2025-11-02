@@ -181,6 +181,11 @@ ENTRYPOINT ["/app/wd-worker"]
 
 **`./rendered ↔ /app/rendered`**
 - Final composite images with timestamps (`hud-YYMMDD-HHMM.jpg`)
+- **⚠️ CRITICAL: Never delete files from the rendered directory**
+  - These are archived historical images that serve as a record
+  - The `findMostRecentRendered()` function relies on these files to find the latest wallpaper
+  - Manual deletion or automated cleanup scripts should NEVER target this directory
+  - The `clean` Makefile target has been updated to preserve rendered images
 
 ## Scraping Implementation
 
@@ -294,6 +299,14 @@ ENTRYPOINT ["/app/wd-worker"]
 - **Rendering**: ~1-2 seconds
 
 ## Development Workflow
+
+### File Management
+
+**⚠️ IMPORTANT: Rendered Directory Preservation**
+- The `./rendered/` directory contains archived composite images
+- **Never delete files from this directory** - they serve as historical records
+- The `clean` Makefile target preserves rendered images
+- Only `assets/` directory files are temporary and can be cleaned
 
 ### Making Changes
 

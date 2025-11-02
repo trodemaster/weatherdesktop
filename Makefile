@@ -18,11 +18,18 @@ BUILD_FLAGS := -ldflags="$(LDFLAGS)"
 .PHONY: all
 all: build
 
+# Rebuild everything (Docker + host binary)
+.PHONY: rebuild
+rebuild: docker-build build docker-restart
+	@echo "✓ Complete rebuild finished"
+	@echo "  - Docker image: weatherdesktop-wd-worker"
+	@echo "  - Host binary: $(BUILD_DIR)/$(BINARY_NAME)"
+
 # Build the binary for current OS/arch
 .PHONY: build
 build:
 	@echo "Building for $(GOOS)/$(GOARCH)..."
-	GOOS=$(GOOS) GOARCH=$(GOARCH) go build $(BUILD_FLAGS) -o $(BUILD_DIR)/$(BINARY_NAME) ./cmd/wd
+	CGO_ENABLED=1 GOOS=$(GOOS) GOARCH=$(GOARCH) go build $(BUILD_FLAGS) -o $(BUILD_DIR)/$(BINARY_NAME) ./cmd/wd
 	@echo "✓ Built: $(BUILD_DIR)/$(BINARY_NAME)"
 
 # Clean build artifacts
@@ -33,6 +40,43 @@ clean:
 	@rm -rf assets/*.png assets/*.jpg assets/*.html
 	@rm -rf rendered/*.jpg
 	@echo "✓ Cleaned"
+
+# Docker targets
+.PHONY: docker-build
+docker-build:
+	@echo "Building Docker image..."
+	docker compose build
+	@echo "✓ Docker image built"
+
+.PHONY: docker-up
+docker-up:
+	@echo "Starting wd-worker container..."
+	docker compose up -d --wait
+	@echo "✓ Container started and healthy"
+
+.PHONY: docker-down
+docker-down:
+	@echo "Stopping wd-worker container..."
+	docker compose down
+	@echo "✓ Container stopped"
+
+.PHONY: docker-restart
+docker-restart:
+	@echo "Restarting wd-worker container..."
+	docker compose restart wd-worker
+	@echo "✓ Container restarted"
+
+.PHONY: docker-logs
+docker-logs:
+	docker compose logs -f wd-worker
+
+.PHONY: docker-shell
+docker-shell:
+	docker compose exec wd-worker sh
+
+.PHONY: docker-ps
+docker-ps:
+	docker compose ps
 
 # Install dependencies
 .PHONY: deps
@@ -94,24 +138,30 @@ list-targets: build
 help:
 	@echo "Weather Desktop Makefile"
 	@echo ""
-	@echo "Available targets:"
-	@echo "  make build        - Build binary for current OS/arch (default)"
-	@echo "  make clean        - Remove build artifacts and generated files"
-	@echo "  make deps         - Install/update Go dependencies"
-	@echo "  make test         - Run tests"
-	@echo "  make fmt          - Format Go code"
-	@echo "  make lint         - Run linter (requires golangci-lint)"
-	@echo "  make info         - Show build information"
-	@echo "  make run          - Build and run full pipeline (production, uses lock)"
-	@echo "  make run-debug    - Build and run with debug (test mode, no lock)"
-	@echo "  make list-targets - Build and list scrape targets"
-	@echo "  make help         - Show this help message"
+	@echo "Build targets:"
+	@echo "  make rebuild       - Rebuild everything (Docker + host binary)"
+	@echo "  make build         - Build host binary (requires CGO)"
+	@echo "  make clean         - Remove build artifacts"
+	@echo "  make deps          - Install/update Go dependencies"
 	@echo ""
-	@echo "Lock File Behavior:"
-	@echo "  Production: Uses lock file ($$TMPDIR/wd.lock) to prevent conflicts"
-	@echo "  Test mode:  Bypasses lock (safe to run alongside production)"
-	@echo "    Triggers: -debug OR -scrape-target flags"
-	@echo "    Effects:  Unique filenames, no desktop setting"
+	@echo "Docker targets:"
+	@echo "  make docker-build  - Build Docker image with Playwright"
+	@echo "  make docker-up     - Start wd-worker container"
+	@echo "  make docker-down   - Stop wd-worker container"
+	@echo "  make docker-restart- Restart wd-worker container"
+	@echo "  make docker-logs   - Follow container logs"
+	@echo "  make docker-shell  - Open shell in container"
+	@echo "  make docker-ps     - Show container status"
+	@echo ""
+	@echo "Run targets:"
+	@echo "  make run           - Run full pipeline (scrape, download, crop, render, set desktop)"
+	@echo "  make run-debug     - Run with debug output"
+	@echo "  make list-targets  - List all scrape targets"
+	@echo ""
+	@echo "Development:"
+	@echo "  make fmt           - Format Go code"
+	@echo "  make lint          - Run linter"
+	@echo "  make test          - Run tests"
 	@echo ""
 	@echo "Current configuration:"
 	@echo "  OS:   $(GOOS)"

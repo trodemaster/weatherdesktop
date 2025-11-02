@@ -10,11 +10,7 @@ import (
 
 	"github.com/trodemaster/weatherdesktop/pkg/assets"
 	"github.com/trodemaster/weatherdesktop/pkg/desktop"
-	"github.com/trodemaster/weatherdesktop/pkg/downloader"
-	pkgimage "github.com/trodemaster/weatherdesktop/pkg/image"
-	"github.com/trodemaster/weatherdesktop/pkg/lockfile"
-	"github.com/trodemaster/weatherdesktop/pkg/parser"
-	"github.com/trodemaster/weatherdesktop/pkg/scraper"
+	"github.com/trodemaster/weatherdesktop/pkg/docker"
 )
 
 var (
@@ -23,13 +19,11 @@ var (
 	cropFlag        = flag.Bool("c", false, "Crop/resize images")
 	renderFlag      = flag.Bool("r", false, "Render composite image")
 	desktopFlag     = flag.Bool("p", false, "Set desktop wallpaper")
+	desktopImageFlag = flag.String("set-desktop", "", "Set desktop wallpaper from specified image file path")
 	flushFlag       = flag.Bool("f", false, "Flush/clear assets directory")
-	debugFlag       = flag.Bool("debug", false, "Show Safari browser window (debug mode)")
+	debugFlag       = flag.Bool("debug", false, "Enable debug output")
 	scrapeTargetFlag = flag.String("scrape-target", "", "Test specific scrape target by name")
 	listTargetsFlag = flag.Bool("list-targets", false, "List all available scrape targets and exit")
-	waitFlag        = flag.Int("wait", 0, "Override wait time in milliseconds (0 = use smart wait)")
-	keepBrowserFlag = flag.Bool("keep-browser", false, "Keep Safari session open after scraping (for inspection)")
-	saveFullPageFlag = flag.Bool("save-full-page", false, "Save both full page and element screenshots")
 )
 
 func main() {
@@ -43,18 +37,17 @@ func main() {
 		fmt.Fprintf(os.Stderr, "   -d                    Download Images\n")
 		fmt.Fprintf(os.Stderr, "   -c                    Crop Images\n")
 		fmt.Fprintf(os.Stderr, "   -r                    Render Image\n")
-		fmt.Fprintf(os.Stderr, "   -p                    Set Desktop\n")
+		fmt.Fprintf(os.Stderr, "   -p                    Set Desktop (uses most recent rendered image)\n")
+		fmt.Fprintf(os.Stderr, "   -set-desktop <path>   Set desktop wallpaper from specified image file\n")
 		fmt.Fprintf(os.Stderr, "   -f                    Flush assets\n")
 		fmt.Fprintf(os.Stderr, "\nDEBUG OPTIONS:\n")
-		fmt.Fprintf(os.Stderr, "   -debug                Show Safari browser (headless by default)\n")
+		fmt.Fprintf(os.Stderr, "   -debug                Enable debug output\n")
 		fmt.Fprintf(os.Stderr, "   -list-targets         List all available scrape targets\n")
 		fmt.Fprintf(os.Stderr, "   -scrape-target <name> Test specific scrape target (e.g., \"Weather.gov Hourly\")\n")
-		fmt.Fprintf(os.Stderr, "   -wait <ms>            Override wait time in milliseconds (default: smart wait)\n")
-		fmt.Fprintf(os.Stderr, "   -keep-browser         Keep Safari open after scraping (for inspection)\n")
-		fmt.Fprintf(os.Stderr, "   -save-full-page       Save both full page and element screenshots\n")
 		fmt.Fprintf(os.Stderr, "\nEXAMPLES:\n")
-		fmt.Fprintf(os.Stderr, "   wd -s -scrape-target \"NWAC Stevens\" -wait 10000 -debug\n")
-		fmt.Fprintf(os.Stderr, "   wd -s -debug -keep-browser\n")
+		fmt.Fprintf(os.Stderr, "   wd -s -scrape-target \"NWAC Stevens\" -debug\n")
+		fmt.Fprintf(os.Stderr, "   wd -s -debug\n")
+		fmt.Fprintf(os.Stderr, "   wd -set-desktop ./rendered/hud-251102-1056.jpg\n")
 	}
 	
 	flag.Parse()
@@ -65,25 +58,45 @@ func main() {
 		return
 	}
 
-	// Determine if we're in test/debug mode
-	// Test mode: debug flag OR scrape-target specified
-	testMode := *debugFlag || *scrapeTargetFlag != ""
-	
-	// Acquire lock file for normal operation (skip in test mode)
-	var lock *lockfile.LockFile
-	if !testMode {
-		lock = lockfile.New()
-		if err := lock.TryLock(); err != nil {
-			log.Fatalf("Failed to acquire lock: %v\nAnother instance may be running. Use -debug or -scrape-target for testing.", err)
+	// Handle set-desktop flag (special case - just set desktop from specified file)
+	if *desktopImageFlag != "" {
+		imagePath := *desktopImageFlag
+		
+		// Resolve to absolute path if relative
+		if !filepath.IsAbs(imagePath) {
+			wd, err := os.Getwd()
+			if err != nil {
+				log.Fatalf("Failed to get working directory: %v", err)
+			}
+			imagePath = filepath.Join(wd, imagePath)
 		}
-		defer lock.Unlock()
-		log.Println("Lock acquired")
-	} else {
-		log.Println("🧪 Test mode: bypassing lock file (safe to run alongside production)")
+		
+		// Normalize the path
+		absPath, err := filepath.Abs(imagePath)
+		if err != nil {
+			log.Fatalf("Failed to resolve image path: %v", err)
+		}
+		
+		log.Printf("Setting desktop wallpaper from: %s", absPath)
+		if err := setDesktopWallpaper(absPath); err != nil {
+			log.Fatalf("Failed to set desktop: %v", err)
+		}
+		log.Println("✓ Desktop wallpaper set successfully")
+		return
 	}
+
+	// Get script directory
+	scriptDir, err := filepath.Abs(filepath.Dir(os.Args[0]))
+	if err != nil {
+		log.Fatalf("Failed to get script directory: %v", err)
+	}
+
+	// Initialize Docker client
+	dockerClient := docker.New(scriptDir)
 
 	// Determine which phases to run
 	// If no flags set, run all phases (same logic as bash script lines 82-84)
+	// Note: desktopImageFlag is handled separately above, so we exclude it from runAll check
 	runAll := !(*scrapeFlag || *downloadFlag || *cropFlag || *renderFlag || *desktopFlag || *flushFlag)
 	
 	doScrape := runAll || *scrapeFlag
@@ -92,23 +105,9 @@ func main() {
 	doRender := runAll || *renderFlag
 	doDesktop := runAll || *desktopFlag
 	doFlush := runAll || *flushFlag
-
-	// Get script directory
-	scriptDir, err := filepath.Abs(filepath.Dir(os.Args[0]))
-	if err != nil {
-		log.Fatalf("Failed to get script directory: %v", err)
-	}
 	
-	// Generate output filename with timestamp
-	// In test mode, add more precision to avoid conflicts
-	var renderedFilename string
-	if testMode {
-		renderedFilename = fmt.Sprintf("hud-TEST-%s.jpg", time.Now().Format("060102-150405"))
-		log.Printf("🧪 Test mode: Starting generation of %s", renderedFilename)
-	} else {
-		renderedFilename = fmt.Sprintf("hud-%s.jpg", time.Now().Format("060102-1504"))
-		log.Printf("Starting generation of %s", renderedFilename)
-	}
+	// Filename will be generated by container at render time to avoid timezone/timing issues
+	log.Printf("Starting wallpaper generation...")
 
 	// Phase 0: Flush assets if requested
 	if doFlush {
@@ -117,26 +116,36 @@ func main() {
 		}
 	}
 
-	// Phase 1: Download images
-	if doDownload {
-		log.Println("Downloading images...")
-		if err := downloadImages(scriptDir); err != nil {
-			log.Printf("Warning: Some downloads failed: %v", err)
+	// Ensure Docker container is running for any Docker-based phases
+	if doDownload || doScrape || doCrop || doRender {
+		if err := dockerClient.EnsureRunning(); err != nil {
+			log.Fatalf("Failed to ensure Docker container is running: %v", err)
 		}
 	}
 
-	// Phase 2: Scrape websites
+	// Phase 1: Scrape websites
 	if doScrape {
 		log.Println("Scraping sites...")
-		scrapeOpts := ScrapeOptions{
-			Debug:        *debugFlag,
-			TargetFilter: *scrapeTargetFlag,
-			WaitOverride: *waitFlag,
-			KeepBrowser:  *keepBrowserFlag,
-			SaveFullPage: *saveFullPageFlag,
+		
+		args := []string{"/app/wd-worker", "scrape"}
+		if *debugFlag {
+			args = append(args, "--debug")
 		}
-		if err := scrapeSites(scriptDir, scrapeOpts); err != nil {
-			log.Printf("Warning: Some scrapes failed: %v", err)
+		if *scrapeTargetFlag != "" {
+			args = append(args, "--target", *scrapeTargetFlag)
+		}
+		
+		if err := dockerClient.Exec(args...); err != nil {
+			log.Fatalf("Failed to scrape sites: %v", err)
+		}
+	}
+
+	// Phase 2: Download images
+	if doDownload {
+		log.Println("Downloading images...")
+		
+		if err := dockerClient.Exec("/app/wd-worker", "download"); err != nil {
+			log.Fatalf("Failed to download images: %v", err)
 		}
 	}
 
@@ -148,20 +157,23 @@ func main() {
 	// Phase 3: Crop and resize images
 	if doCrop {
 		log.Println("Cropping images...")
-		if err := cropImages(scriptDir); err != nil {
-			log.Printf("Warning: Some crops failed: %v", err)
+		
+		if err := dockerClient.Exec("/app/wd-worker", "crop"); err != nil {
+			log.Fatalf("Failed to crop images: %v", err)
 		}
+		
 		log.Println("Cropping completed...")
 	}
 
 	// Phase 4: Render composite image
 	if doRender {
 		log.Println("Rendering...")
-		renderedPath := filepath.Join(scriptDir, "rendered", renderedFilename)
-		if err := renderComposite(scriptDir, renderedPath); err != nil {
+		
+		if err := dockerClient.Exec("/app/wd-worker", "render"); err != nil {
 			log.Fatalf("Failed to render composite: %v", err)
 		}
-		log.Printf("Rendering %s completed...", renderedPath)
+		
+		log.Println("Rendering completed...")
 	}
 
 	// Phase 5: Set desktop wallpaper
@@ -171,27 +183,35 @@ func main() {
 			log.Println("⚠️  Skipping desktop wallpaper setting (debug mode active)")
 			log.Println("   Remove -debug flag to set desktop wallpaper")
 		} else {
-			renderedPath := filepath.Join(scriptDir, "rendered", renderedFilename)
-			if _, err := os.Stat(renderedPath); os.IsNotExist(err) {
-				log.Fatalf("Rendered file %s not found. Run with render and set desktop at the same time", renderedPath)
+			// Find the most recent rendered file
+			renderedDir := filepath.Join(scriptDir, "rendered")
+			renderedPath, err := findMostRecentRendered(renderedDir)
+			if err != nil {
+				log.Fatalf("Failed to find rendered file: %v", err)
 			}
 			
 			log.Printf("Setting desktop to %s", renderedPath)
 			if err := setDesktopWallpaper(renderedPath); err != nil {
 				log.Fatalf("Failed to set desktop: %v", err)
 			}
+			log.Println("✓ Desktop wallpaper set successfully")
 		}
+	} else {
+		log.Printf("Skipping desktop wallpaper (doDesktop=%v, runAll=%v, desktopFlag=%v)", doDesktop, runAll, *desktopFlag)
 	}
 
 	// Optional: Copy to CDN if mounted
 	cdnPath := "/Volumes/Bomb20/cdn"
 	if doRender {
 		if info, err := os.Stat(cdnPath); err == nil && info.IsDir() {
-			renderedPath := filepath.Join(scriptDir, "rendered", renderedFilename)
-			destPath := filepath.Join(cdnPath, "stevens_pass.jpg")
-			log.Printf("Copying %s to %s", renderedPath, destPath)
-			if err := copyFile(renderedPath, destPath); err != nil {
-				log.Printf("Warning: Failed to copy to CDN: %v", err)
+			renderedDir := filepath.Join(scriptDir, "rendered")
+			renderedPath, err := findMostRecentRendered(renderedDir)
+			if err == nil {
+				destPath := filepath.Join(cdnPath, "stevens_pass.jpg")
+				log.Printf("Copying %s to %s", renderedPath, destPath)
+				if err := copyFile(renderedPath, destPath); err != nil {
+					log.Printf("Warning: Failed to copy to CDN: %v", err)
+				}
 			}
 		}
 	}
@@ -200,6 +220,40 @@ func main() {
 }
 
 // flushAssets removes all files from the assets directory
+func findMostRecentRendered(renderedDir string) (string, error) {
+	pattern := filepath.Join(renderedDir, "hud-*.jpg")
+	files, err := filepath.Glob(pattern)
+	if err != nil {
+		return "", fmt.Errorf("failed to glob rendered files: %w", err)
+	}
+	
+	if len(files) == 0 {
+		return "", fmt.Errorf("no rendered files found in %s", renderedDir)
+	}
+	
+	// Find the most recently modified file
+	var mostRecent string
+	var mostRecentTime time.Time
+	
+	for _, file := range files {
+		info, err := os.Stat(file)
+		if err != nil {
+			continue
+		}
+		
+		if mostRecent == "" || info.ModTime().After(mostRecentTime) {
+			mostRecent = file
+			mostRecentTime = info.ModTime()
+		}
+	}
+	
+	if mostRecent == "" {
+		return "", fmt.Errorf("failed to determine most recent rendered file")
+	}
+	
+	return mostRecent, nil
+}
+
 func flushAssets(scriptDir string) error {
 	assetsDir := filepath.Join(scriptDir, "assets")
 	
@@ -221,106 +275,6 @@ func flushAssets(scriptDir string) error {
 	}
 	
 	return nil
-}
-
-// downloadImages downloads all configured images
-func downloadImages(scriptDir string) error {
-	mgr := assets.NewManager(scriptDir)
-	dl := downloader.New(mgr)
-	return dl.DownloadAll()
-}
-
-// ScrapeOptions contains options for scraping
-type ScrapeOptions struct {
-	Debug        bool
-	TargetFilter string
-	WaitOverride int
-	KeepBrowser  bool
-	SaveFullPage bool
-}
-
-// scrapeSites scrapes all configured websites
-func scrapeSites(scriptDir string, opts ScrapeOptions) error {
-	mgr := assets.NewManager(scriptDir)
-	
-	// Create scraper with Safari WebDriver at localhost:4444
-	webdriverURL := "http://localhost:4444"
-	scrpr := scraper.New(mgr, webdriverURL)
-	
-	// Configure scraper with options
-	scrpr.SetDebugOptions(opts.Debug, opts.SaveFullPage, opts.WaitOverride)
-	
-	// Start Safari session (headless by default, visible when debug=true)
-	if opts.Debug {
-		log.Println("🔍 Debug mode: Safari browser window will be visible")
-		if opts.SaveFullPage {
-			log.Println("📸 Full page screenshots will be saved")
-		}
-		if opts.WaitOverride > 0 {
-			log.Printf("⏰ Wait time override: %dms", opts.WaitOverride)
-		} else {
-			log.Println("⏰ Using smart wait (polls for element)")
-		}
-	}
-	
-	if err := scrpr.StartWithDebug(opts.Debug); err != nil {
-		return fmt.Errorf("failed to start Safari WebDriver session: %w", err)
-	}
-	
-	// Conditionally defer Stop based on keep-browser flag
-	if !opts.KeepBrowser {
-		defer scrpr.Stop()
-	} else {
-		log.Println("⚠️  Browser will be kept open (use -keep-browser=false or kill process to close)")
-	}
-	
-	// Scrape all targets (or filtered target)
-	if opts.TargetFilter != "" {
-		log.Printf("🎯 Testing specific target: %s", opts.TargetFilter)
-		if err := scrpr.ScrapeFiltered(opts.TargetFilter); err != nil {
-			return fmt.Errorf("failed to scrape target: %w", err)
-		}
-	} else {
-		if err := scrpr.ScrapeAll(); err != nil {
-			return fmt.Errorf("failed to scrape sites: %w", err)
-		}
-	}
-	
-	// Parse WSDOT HTML and create pass conditions image
-	htmlPath := filepath.Join(scriptDir, "assets", "wsdot_stevens_pass.html")
-	prsr := parser.New()
-	status, err := prsr.ParseWSDOTPassStatus(htmlPath)
-	if err != nil {
-		log.Printf("Warning: Failed to parse WSDOT status: %v", err)
-		// Create empty pass conditions image
-		passCondPath := mgr.GetPassConditionsImagePath()
-		return pkgimage.CreateEmptyImage(250, 200, passCondPath)
-	}
-	
-	// Create pass conditions image based on status
-	passCondPath := mgr.GetPassConditionsImagePath()
-	if status.IsClosed {
-		log.Printf("Pass is CLOSED: %s", status.Conditions)
-		renderer := pkgimage.NewTextRenderer()
-		return renderer.RenderCaption(status.Conditions, 250, 200, passCondPath)
-	} else {
-		log.Println("Pass is OPEN")
-		return pkgimage.CreateEmptyImage(250, 200, passCondPath)
-	}
-}
-
-// cropImages crops and resizes all configured images
-func cropImages(scriptDir string) error {
-	mgr := assets.NewManager(scriptDir)
-	proc := pkgimage.NewProcessor(mgr)
-	return proc.ProcessAll()
-}
-
-// renderComposite creates the final composite image
-func renderComposite(scriptDir, outputPath string) error {
-	mgr := assets.NewManager(scriptDir)
-	comp := pkgimage.NewCompositor(mgr)
-	return comp.Render(outputPath)
 }
 
 // setDesktopWallpaper sets the desktop wallpaper using CGO

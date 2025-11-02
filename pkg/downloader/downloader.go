@@ -1,6 +1,8 @@
 package downloader
 
 import (
+	"crypto/tls"
+	"crypto/x509"
 	"fmt"
 	"image"
 	"image/color"
@@ -23,9 +25,50 @@ type Downloader struct {
 
 // New creates a new downloader
 func New(manager *assets.Manager) *Downloader {
+	// Always load CA certificates from bundle file
+	// SystemCertPool() may not work properly in containers without CGO
+	systemCertPool := x509.NewCertPool()
+	
+	// Try to load from standard Ubuntu/Debian location first
+	certPaths := []string{
+		"/etc/ssl/certs/ca-certificates.crt",
+		"/etc/pki/tls/certs/ca-bundle.crt",
+		"/etc/ssl/ca-bundle.pem",
+	}
+	
+	loaded := false
+	for _, path := range certPaths {
+		if certs, err := os.ReadFile(path); err == nil {
+			if systemCertPool.AppendCertsFromPEM(certs) {
+				log.Printf("Loaded CA certificates from %s", path)
+				loaded = true
+				break
+			}
+		}
+	}
+	
+	// Fallback to SystemCertPool if direct loading failed
+	if !loaded {
+		if pool, err := x509.SystemCertPool(); err == nil && pool != nil {
+			systemCertPool = pool
+			log.Printf("Using system cert pool")
+		} else {
+			log.Printf("Warning: Failed to load CA certificates")
+		}
+	}
+	
+	// Create HTTP client with system certificates
+	transport := &http.Transport{
+		TLSClientConfig: &tls.Config{
+			RootCAs:            systemCertPool,
+			InsecureSkipVerify: false,
+		},
+	}
+	
 	return &Downloader{
 		client: &http.Client{
-			Timeout: 60 * time.Second,
+			Timeout:   10 * time.Second,
+			Transport: transport,
 		},
 		manager: manager,
 	}

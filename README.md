@@ -5,54 +5,104 @@ A Go implementation of the weather desktop script that creates a composite deskt
 ## Features
 
 - ✅ **Pure Go & stdlib** - Uses only standard library and `golang.org/x/*` packages
-- ✅ **Safari WebDriver** - Native macOS browser automation for scraping (1920x1200 window)
-- ✅ **CGO Desktop Setting** - Direct NSWorkspace API calls for wallpaper setting
+- ✅ **Playwright WebKit** - Modern browser automation in Docker for reliable scraping
+- ✅ **Docker Compose** - Isolated execution environment with persistent container
+- ✅ **CGO Desktop Setting** - Direct NSWorkspace API calls for wallpaper setting (macOS host)
 - ✅ **Concurrent Downloads** - Fast parallel image downloads with fallback handling
 - ✅ **Image Processing** - Crop, resize, and composite using stdlib `image/draw`
 - ✅ **Flag-based CLI** - Simple command-line interface matching original bash script
-- ✅ **Lock File Protection** - Prevents concurrent production runs; test mode bypasses lock
-- ✅ **Smart Element Capture** - Large window size ensures full content screenshots
+
+## Architecture
+
+```
+┌─────────────────────────────────────────────────────────┐
+│  macOS Host                                             │
+│  ┌───────────────────────────────────────────────────┐  │
+│  │  wd binary (orchestrates Docker + sets wallpaper) │  │
+│  └──────────────────┬────────────────────────────────┘  │
+│                     │                                    │
+│  ┌──────────────────▼──────────────────────────────┐    │
+│  │  Docker Compose v2                              │    │
+│  │  ┌────────────────────────────────────────────┐ │    │
+│  │  │  wd-worker container                       │ │    │
+│  │  │  ┌──────────────────────────────────────┐  │ │    │
+│  │  │  │  Playwright-Go + WebKit              │  │ │    │
+│  │  │  │  - Web scraping                      │  │ │    │
+│  │  │  │  - Image downloads                   │  │ │    │
+│  │  │  │  - Image cropping/resizing           │  │ │    │
+│  │  │  │  - Composite rendering               │  │ │    │
+│  │  │  └──────────────────────────────────────┘  │ │    │
+│  │  └────────────────────────────────────────────┘ │    │
+│  └─────────────────────────────────────────────────┘    │
+│                                                          │
+│  Shared Volumes:                                         │
+│  ./assets   ←→  /app/assets   (scraped/downloaded)      │
+│  ./rendered ←→  /app/rendered (final composites)        │
+└─────────────────────────────────────────────────────────┘
+```
 
 ## Prerequisites
 
 1. **Go 1.21+** - Install from [golang.org](https://golang.org)
-2. **Safari WebDriver** - Enable and start:
-   ```bash
-   sudo safaridriver --enable
-   safaridriver --port=4444 &
-   ```
-3. **macOS** - Required for desktop wallpaper setting (Cocoa APIs)
+2. **Docker Desktop** - Install from [docker.com](https://www.docker.com/products/docker-desktop)
+3. **Docker Compose v2** - Included with Docker Desktop
+4. **macOS** - Required for desktop wallpaper setting (Cocoa APIs)
 
 ## Installation
 
-### Using Make (Recommended)
+### Quick Start
 
 ```bash
 cd /Users/blake/code/weatherdesktop
 
-# Build for current OS/arch (auto-detected)
+# Build Docker image (first time only)
+make docker-build
+
+# Build host binary
 make build
 
-# Or simply
-make
+# Run full pipeline
+make run
 ```
 
-### Using Go directly
+### Manual Build
 
 ```bash
-go build -o wd ./cmd/wd
+# Build Docker image
+docker compose build
+
+# Build host binary
+CGO_ENABLED=1 go build -o wd ./cmd/wd
+
+# Run
+./wd
 ```
 
 ### Makefile Targets
 
+#### Build & Run
 ```bash
-make build        # Build binary (default)
-make clean        # Remove build artifacts
-make deps         # Install/update dependencies
-make info         # Show build information
+make build        # Build host binary (default)
+make docker-build # Build Docker image with Playwright
 make run          # Build and run full pipeline
 make run-debug    # Build and run with debug
-make list-targets # List scrape targets
+make clean        # Remove build artifacts
+```
+
+#### Docker Management
+```bash
+make docker-up      # Start wd-worker container
+make docker-down    # Stop and remove container
+make docker-restart # Restart container
+make docker-logs    # Follow container logs
+make docker-shell   # Open shell in container
+make docker-ps      # List container status
+```
+
+#### Development
+```bash
+make deps         # Install/update dependencies
+make info         # Show build information
 make help         # Show all targets
 ```
 
@@ -63,11 +113,12 @@ make help         # Show all targets
 ./wd
 ```
 This will:
-1. Download weather satellite and webcam images
-2. Scrape weather forecasts and avalanche data
-3. Crop and resize all images
-4. Composite into final 3840x2160 image
-5. Set as desktop wallpaper
+1. Ensure Docker container is running
+2. Download weather satellite and webcam images (in container)
+3. Scrape weather forecasts and avalanche data (Playwright/WebKit in container)
+4. Crop and resize all images (in container)
+5. Composite into final 3840x2160 image (in container)
+6. Set as desktop wallpaper (on host)
 
 ### Individual Phases
 
@@ -89,67 +140,65 @@ This will:
 
 ### Debug Mode
 
-By default, Safari runs **headless** (no visible browser window). Enhanced debug capabilities:
+By default, Playwright WebKit runs **headless** in Docker. Debug mode shows the browser:
 
 ```bash
-# Basic debug (show browser)
-./wd -s -debug        # Scrape with visible Safari browser
+# Basic debug (show browser in container)
+./wd -s -debug        # Scrape with visible WebKit browser
 ./wd -debug           # Full pipeline with visible browser
 
 # Test specific scrape target
 ./wd -s -scrape-target "NWAC Stevens" -debug
-
-# Increase wait time for slow pages (10 seconds)
-./wd -s -scrape-target "NWAC Avalanche" -wait 10000 -debug
-
-# Keep browser open for manual inspection
-./wd -s -debug -keep-browser
-
-# Save both full page and cropped element screenshots
-./wd -s -scrape-target "Weather.gov Hourly" -debug -save-full-page
+./wd -s -scrape-target "Weather.gov Hourly" -debug
 
 # Combine options
-./wd -s -scrape-target "NWAC" -wait 8000 -debug -keep-browser -save-full-page
+./wd -s -scrape-target "NWAC" -debug
 ```
 
 #### Debug Features
 
-- **Smart Wait** (default): Polls for element every 100ms, proceeds when found
-- **Manual Wait Override**: `-wait <ms>` forces fixed wait time
+- **Visible Browser**: `-debug` shows WebKit window in Docker
 - **Verbose Logging**: Shows URL, selector, timing, element detection status
-- **Timestamped Screenshots**: Debug mode adds timestamp to filenames
-- **Full Page Capture**: `-save-full-page` saves both full page and element crops
-- **Browser Persistence**: `-keep-browser` leaves Safari open for inspection
 - **Target Filtering**: Test individual scrapers without running full pipeline
+- **Real-time Logs**: Container logs stream to console in debug mode
 - **Safety**: Debug mode automatically skips desktop wallpaper setting
 
 ## Project Structure
 
 ```
 weatherdesktop/
-├── cmd/wd/main.go              # CLI entry point
+├── cmd/
+│   ├── wd/main.go              # Host orchestrator (Docker + desktop)
+│   └── wd-worker/main.go       # Container worker (scrape/render)
 ├── pkg/
 │   ├── assets/                 # Asset configuration & paths
 │   ├── downloader/             # HTTP downloads with retry
-│   ├── scraper/                # Safari WebDriver scraping
+│   ├── playwright/             # Playwright-Go WebKit scraping
 │   ├── parser/                 # HTML parsing with x/net/html
 │   ├── image/                  # Image processing & compositing
 │   │   ├── processor.go        # Crop & resize
 │   │   ├── compositor.go       # Layer images
 │   │   └── text.go             # Text rendering
 │   ├── desktop/                # macOS wallpaper setting (CGO)
-│   └── webdriver/              # Safari WebDriver client
-├── assets/                     # Downloaded/scraped images
-└── rendered/                   # Final composite outputs
+│   └── docker/                 # Docker Compose client
+├── assets/                     # Downloaded/scraped images (shared)
+├── rendered/                   # Final composite outputs (shared)
+├── Dockerfile                  # Worker container definition
+└── compose.yaml                # Docker Compose v2 config
 ```
 
 ## Dependencies
 
-All dependencies are standard library or `golang.org/x/*`:
-
+### Host Binary (cmd/wd)
 - `golang.org/x/image/draw` - Image scaling with interpolation
 - `golang.org/x/image/font` - Text rendering
 - `golang.org/x/net/html` - HTML parsing
+- CGO - macOS Cocoa APIs for desktop setting
+
+### Container (cmd/wd-worker)
+- `github.com/playwright-community/playwright-go` - Browser automation
+- WebKit browser binaries (installed in Docker image)
+- Standard library packages for image processing
 
 ## Data Sources
 
@@ -170,72 +219,93 @@ Final composite image: `rendered/hud-YYMMDD-HHMM.jpg`
 - Format: JPEG (quality 90)
 - Sky blue background with layered images
 
+## How It Works
+
+1. **Host `wd` binary** checks Docker container status
+2. If not running, starts `wd-worker` container via Docker Compose
+3. Executes commands in container via `docker compose exec`:
+   - `wd-worker scrape` - Playwright WebKit scraping
+   - `wd-worker download` - HTTP image downloads
+   - `wd-worker crop` - Image processing
+   - `wd-worker render` - Composite generation
+4. **Host `wd` binary** reads rendered image from shared volume
+5. Uses CGO to set macOS desktop wallpaper
+
 ## Differences from Bash Version
 
-1. **Safari WebDriver** instead of shot-scraper (Python)
+1. **Playwright WebKit in Docker** instead of shot-scraper (Python)
 2. **Pure Go image processing** instead of ImageMagick
 3. **CGO NSWorkspace** instead of desktoppr binary
 4. **stdlib flag** instead of custom argument parsing
 5. **Concurrent downloads** with goroutines instead of background jobs
 6. **Better error handling** with fallback to empty images
-
-## Lock File & Concurrent Runs
-
-### Production Mode (Lock Protected)
-
-Normal runs use a lock file to prevent conflicts:
-```bash
-./wd              # Exits if another instance is running
-make run          # Protected by lock file
-```
-
-### Test Mode (Safe Alongside Production)
-
-Debug and target-specific runs bypass the lock:
-```bash
-./wd -debug                           # Safe to run anytime
-./wd -scrape-target "NWAC" -debug     # Safe to run anytime
-make run-debug                        # Safe to run anytime
-```
-
-Test runs use unique filenames (`hud-TEST-*.jpg`) to avoid conflicts.
-
-**See [LOCKFILE.md](LOCKFILE.md) for complete documentation.**
+7. **Container isolation** for reliable, reproducible scraping environment
 
 ## Troubleshooting
 
-### Another Instance Already Running
+### Docker Container Not Starting
 
-```
-Failed to acquire lock: another instance is already running (PID: 12345)
-```
-
-**Solutions:**
-- Wait for other instance to finish
-- Use test mode: `./wd -debug`
-- Remove stale lock: `rm $TMPDIR/wd.lock`
-
-### Safari WebDriver Not Running
 ```bash
-# Check if running
-ps aux | grep safaridriver
+# Check Docker is running
+docker info
 
-# Start it
-safaridriver --port=4444 &
+# Check container status
+make docker-ps
+docker compose ps
+
+# View logs
+make docker-logs
+docker compose logs -f wd-worker
+
+# Restart container
+make docker-restart
 ```
 
-### Build Errors with CGO
+### Build Errors with CGO (Host Binary)
+
 Make sure Xcode Command Line Tools are installed:
 ```bash
 xcode-select --install
 ```
 
+### Container Build Errors
+
+```bash
+# Clean rebuild
+docker compose build --no-cache
+
+# Check Docker resources (Settings > Resources)
+# Playwright needs at least 2GB RAM
+```
+
 ### Missing Assets
+
 Run with `-f` flag to clear assets and start fresh:
 ```bash
 ./wd -f
 ./wd
 ```
+
+### Playwright Browser Issues
+
+If WebKit fails to launch in container:
+```bash
+# Rebuild with fresh Playwright install
+docker compose down
+docker compose build --no-cache
+docker compose up -d
+```
+
+## Scheduled Runs
+
+For periodic execution via cron or launchd:
+
+```bash
+# Add to crontab
+*/30 * * * * cd /Users/blake/code/weatherdesktop && ./wd >> /tmp/wd.log 2>&1
+```
+
+The Docker container will stay running between executions, providing fast startup times.
 
 ## License
 

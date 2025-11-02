@@ -134,21 +134,21 @@ func (m *Manager) GetScrapeTargets() []ScrapeTarget {
 			URL:        "https://nwac.us/data-portal/graph/21/",
 			Selector:   "#post-146 > div",
 			OutputPath: filepath.Join(m.AssetsDir, "nwac_stevens_observations.png"),
-			WaitTime:   5000,
+			WaitTime:   15000, // Increased for slow NWAC site
 		},
 		{
 			Name:       "NWAC Avalanche Forecast",
 			URL:        "https://nwac.us/avalanche-forecast/#/stevens-pass",
 			Selector:   "#nac-tab-resizer > div > div:nth-child(1) > div > div.nac-danger.nac-mb-4 > div.nac-row > div.nac-dangerToday.nac-col-lg-8.nac-mb-3 > div.nac-dangerGraphic",
 			OutputPath: filepath.Join(m.AssetsDir, "nwac_stevens_avalanche_forcast.png"),
-			WaitTime:   1000,
+			WaitTime:   15000, // Increased for slow NWAC site
 		},
 		{
 			Name:       "NWAC Avalanche Forecast Map",
 			URL:        "https://nwac.us",
 			Selector:   "#danger-map-widget",
 			OutputPath: filepath.Join(m.AssetsDir, "nwac_avalanche_forcast.png"),
-			WaitTime:   1000,
+			WaitTime:   15000, // Increased for slow NWAC site
 		},
 	}
 }

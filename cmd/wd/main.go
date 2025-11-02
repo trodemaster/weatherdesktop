@@ -59,6 +59,7 @@ func main() {
 	}
 
 	// Handle set-desktop flag (special case - just set desktop from specified file)
+	// Always allows desktop setting (even with -debug) since it's explicitly requested
 	if *desktopImageFlag != "" {
 		imagePath := *desktopImageFlag
 		
@@ -77,11 +78,15 @@ func main() {
 			log.Fatalf("Failed to resolve image path: %v", err)
 		}
 		
-		log.Printf("Setting desktop wallpaper from: %s", absPath)
+		if *debugFlag {
+			log.Printf("Setting desktop wallpaper on all screens (debug mode) from: %s", absPath)
+		} else {
+			log.Printf("Setting desktop wallpaper on all screens from: %s", absPath)
+		}
 		if err := setDesktopWallpaper(absPath); err != nil {
 			log.Fatalf("Failed to set desktop: %v", err)
 		}
-		log.Println("✓ Desktop wallpaper set successfully")
+		log.Println("✓ Desktop wallpaper set successfully on all screens")
 		return
 	}
 
@@ -178,10 +183,13 @@ func main() {
 
 	// Phase 5: Set desktop wallpaper
 	if doDesktop {
-		// Skip desktop setting in debug mode
-		if *debugFlag {
+		// Skip desktop setting in debug mode UNLESS desktop was explicitly requested (-p flag)
+		// This allows troubleshooting desktop setting with -p -debug while preventing accidental
+		// wallpaper changes during other debug operations
+		skipDesktopInDebug := *debugFlag && !*desktopFlag
+		if skipDesktopInDebug {
 			log.Println("⚠️  Skipping desktop wallpaper setting (debug mode active)")
-			log.Println("   Remove -debug flag to set desktop wallpaper")
+			log.Println("   Use -p -debug to set desktop with debug output, or remove -debug flag")
 		} else {
 			// Find the most recent rendered file
 			renderedDir := filepath.Join(scriptDir, "rendered")
@@ -190,11 +198,15 @@ func main() {
 				log.Fatalf("Failed to find rendered file: %v", err)
 			}
 			
-			log.Printf("Setting desktop to %s", renderedPath)
+			if *debugFlag {
+				log.Printf("Setting desktop wallpaper on all screens (debug mode): %s", renderedPath)
+			} else {
+				log.Printf("Setting desktop wallpaper on all screens: %s", renderedPath)
+			}
 			if err := setDesktopWallpaper(renderedPath); err != nil {
 				log.Fatalf("Failed to set desktop: %v", err)
 			}
-			log.Println("✓ Desktop wallpaper set successfully")
+			log.Println("✓ Desktop wallpaper set successfully on all screens")
 		}
 	} else {
 		log.Printf("Skipping desktop wallpaper (doDesktop=%v, runAll=%v, desktopFlag=%v)", doDesktop, runAll, *desktopFlag)
@@ -279,14 +291,28 @@ func flushAssets(scriptDir string) error {
 
 // setDesktopWallpaper sets the desktop wallpaper using CGO
 func setDesktopWallpaper(imagePath string) error {
-	if err := desktop.SetWallpaper(imagePath); err != nil {
+	verbose := *debugFlag
+	log.Printf("Desktop: ========================================")
+	log.Printf("Desktop: Setting desktop wallpaper")
+	log.Printf("Desktop: Image path: %s", imagePath)
+	log.Printf("Desktop: Verbose logging: %v", verbose)
+	log.Printf("Desktop: ========================================")
+	
+	if err := desktop.SetWallpaper(imagePath, verbose); err != nil {
+		log.Printf("Desktop: ERROR - SetWallpaper failed: %v", err)
 		return err
 	}
+	log.Printf("Desktop: SetWallpaper completed successfully")
 	
 	// Also clear wallpaper cache
-	if err := desktop.ClearWallpaperCache(); err != nil {
-		log.Printf("Warning: %v", err)
+	log.Printf("Desktop: Clearing wallpaper cache...")
+	if err := desktop.ClearWallpaperCache(verbose); err != nil {
+		log.Printf("Desktop: Warning: %v", err)
 	}
+	
+	log.Printf("Desktop: ========================================")
+	log.Printf("Desktop: Desktop wallpaper setting process complete")
+	log.Printf("Desktop: ========================================")
 	
 	return nil
 }

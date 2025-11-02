@@ -3,4 +3,6 @@ scrape/.venv_scrape
 .venv_scrape
 *.png
 **/*.jpg
-dc
+wd
+wd-worker
+**/*.html

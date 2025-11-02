@@ -1,0 +1,8 @@
+module github.com/trodemaster/weatherdesktop
+
+go 1.25.3
+
+require (
+	golang.org/x/image v0.32.0
+	golang.org/x/net v0.46.0
+)

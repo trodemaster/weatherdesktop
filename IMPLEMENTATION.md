@@ -267,6 +267,28 @@ ENTRYPOINT ["/app/wd-worker"]
 - Desktop setting must run on macOS host (cannot use Docker)
 - CGO requires Xcode Command Line Tools
 
+**macOS Sequoia (15.x) / Tahoe (26.x) Issue:**
+- **KNOWN BUG**: `setDesktopImageURL` reports success but wallpaper extension system fails
+- Error: `WallpaperExtensionKit.WallpaperExtensionError (3)` - "Failed to create snapshot to export"
+- Error: `NSCocoaErrorDomain (4099)` - File access/sandboxing issues
+- API accepts the call but extension system reverts to default wallpaper after ~45 seconds
+- No newer public API available (checked macOS 26.0 SDK)
+- Private frameworks (`Wallpaper.framework`, `WallpaperExtensionKit.framework`) exist but are undocumented Swift-only XPC APIs
+
+**Investigation Findings:**
+- API must be called from main thread (documented requirement)
+- File verification shows API sets wallpaper, but `desktopImageURLForScreen` immediately returns default
+- WallpaperAgent processes XPC message `setLegacyDesktopPictureConfiguration` but fails during export
+- Extension system appears to require specific file location or permissions that are not documented
+
+**Workaround Status:**
+- AppleScript fallback not viable (user preference)
+- Investigating alternative approaches:
+  - File location requirements (may need to copy to `~/Library/Application Support/com.apple.wallpaper/`)
+  - File permissions/accessibility requirements
+  - Sandboxing/TCC requirements
+  - Extension system notification/refresh mechanisms
+
 ### Filename Handling
 
 - Container generates filenames with PST timezone (`hud-YYMMDD-HHMM.jpg`)

@@ -5,6 +5,7 @@ import (
 	"fmt"
 	"log"
 	"os"
+	"os/exec"
 	"path/filepath"
 	"time"
 
@@ -20,6 +21,7 @@ var (
 	renderFlag      = flag.Bool("r", false, "Render composite image")
 	desktopFlag     = flag.Bool("p", false, "Set desktop wallpaper")
 	desktopImageFlag = flag.String("set-desktop", "", "Set desktop wallpaper from specified image file path")
+	desktopMethodFlag = flag.String("desktop-method", "shortcuts", "Wallpaper setting method: 'shortcuts' (default) or 'cgo'")
 	flushFlag       = flag.Bool("f", false, "Flush/clear assets directory")
 	debugFlag       = flag.Bool("debug", false, "Enable debug output")
 	scrapeTargetFlag = flag.String("scrape-target", "", "Test specific scrape target by name")
@@ -39,6 +41,7 @@ func main() {
 		fmt.Fprintf(os.Stderr, "   -r                    Render Image\n")
 		fmt.Fprintf(os.Stderr, "   -p                    Set Desktop (uses most recent rendered image)\n")
 		fmt.Fprintf(os.Stderr, "   -set-desktop <path>   Set desktop wallpaper from specified image file\n")
+		fmt.Fprintf(os.Stderr, "   -desktop-method <m>   Wallpaper method: 'shortcuts' (default) or 'cgo'\n")
 		fmt.Fprintf(os.Stderr, "   -f                    Flush assets\n")
 		fmt.Fprintf(os.Stderr, "\nDEBUG OPTIONS:\n")
 		fmt.Fprintf(os.Stderr, "   -debug                Enable debug output\n")
@@ -48,6 +51,7 @@ func main() {
 		fmt.Fprintf(os.Stderr, "   wd -s -scrape-target \"NWAC Stevens\" -debug\n")
 		fmt.Fprintf(os.Stderr, "   wd -s -debug\n")
 		fmt.Fprintf(os.Stderr, "   wd -set-desktop ./rendered/hud-251102-1056.jpg\n")
+		fmt.Fprintf(os.Stderr, "   wd -set-desktop ./rendered/hud-251102-1056.jpg -desktop-method cgo\n")
 	}
 	
 	flag.Parse()
@@ -83,7 +87,7 @@ func main() {
 		} else {
 			log.Printf("Setting desktop wallpaper on all screens from: %s", absPath)
 		}
-		if err := setDesktopWallpaper(absPath); err != nil {
+		if err := setDesktopWallpaper(absPath, *desktopMethodFlag); err != nil {
 			log.Fatalf("Failed to set desktop: %v", err)
 		}
 		log.Println("✓ Desktop wallpaper set successfully on all screens")
@@ -199,11 +203,11 @@ func main() {
 			}
 			
 			if *debugFlag {
-				log.Printf("Setting desktop wallpaper on all screens (debug mode): %s", renderedPath)
+				log.Printf("Setting desktop wallpaper on all screens (debug mode, method: %s): %s", *desktopMethodFlag, renderedPath)
 			} else {
-				log.Printf("Setting desktop wallpaper on all screens: %s", renderedPath)
+				log.Printf("Setting desktop wallpaper on all screens (method: %s): %s", *desktopMethodFlag, renderedPath)
 			}
-			if err := setDesktopWallpaper(renderedPath); err != nil {
+			if err := setDesktopWallpaper(renderedPath, *desktopMethodFlag); err != nil {
 				log.Fatalf("Failed to set desktop: %v", err)
 			}
 			log.Println("✓ Desktop wallpaper set successfully on all screens")
@@ -289,31 +293,76 @@ func flushAssets(scriptDir string) error {
 	return nil
 }
 
-// setDesktopWallpaper sets the desktop wallpaper using CGO
-func setDesktopWallpaper(imagePath string) error {
+// setDesktopWallpaper sets the desktop wallpaper using the specified method
+func setDesktopWallpaper(imagePath string, method string) error {
 	verbose := *debugFlag
 	log.Printf("Desktop: ========================================")
 	log.Printf("Desktop: Setting desktop wallpaper")
 	log.Printf("Desktop: Image path: %s", imagePath)
+	log.Printf("Desktop: Method: %s", method)
 	log.Printf("Desktop: Verbose logging: %v", verbose)
 	log.Printf("Desktop: ========================================")
-	
-	if err := desktop.SetWallpaper(imagePath, verbose); err != nil {
-		log.Printf("Desktop: ERROR - SetWallpaper failed: %v", err)
-		return err
+
+	switch method {
+	case "cgo":
+		if err := desktop.SetWallpaper(imagePath, verbose); err != nil {
+			log.Printf("Desktop: ERROR - CGO SetWallpaper failed: %v", err)
+			return err
+		}
+		log.Printf("Desktop: CGO SetWallpaper completed successfully")
+
+		// Also clear wallpaper cache
+		log.Printf("Desktop: Clearing wallpaper cache...")
+		if err := desktop.ClearWallpaperCache(verbose); err != nil {
+			log.Printf("Desktop: Warning: %v", err)
+		}
+
+	case "shortcuts":
+		if err := setWallpaperViaShortcuts(imagePath, verbose); err != nil {
+			log.Printf("Desktop: ERROR - Shortcuts SetWallpaper failed: %v", err)
+			return err
+		}
+		log.Printf("Desktop: Shortcuts SetWallpaper completed successfully")
+
+	default:
+		return fmt.Errorf("unknown desktop method: %s (supported: 'cgo', 'shortcuts')", method)
 	}
-	log.Printf("Desktop: SetWallpaper completed successfully")
-	
-	// Also clear wallpaper cache
-	log.Printf("Desktop: Clearing wallpaper cache...")
-	if err := desktop.ClearWallpaperCache(verbose); err != nil {
-		log.Printf("Desktop: Warning: %v", err)
-	}
-	
+
 	log.Printf("Desktop: ========================================")
 	log.Printf("Desktop: Desktop wallpaper setting process complete")
 	log.Printf("Desktop: ========================================")
-	
+
+	return nil
+}
+
+// setWallpaperViaShortcuts sets the desktop wallpaper using the macOS shortcuts CLI
+func setWallpaperViaShortcuts(imagePath string, verbose bool) error {
+	if verbose {
+		log.Printf("Desktop: Setting wallpaper via shortcuts CLI")
+		log.Printf("Desktop: Image path: %s", imagePath)
+	}
+
+	// Use macOS shortcuts CLI to set desktop wallpaper
+	// This works around the macOS Sequoia/Tahoe NSWorkspace bug
+	cmd := exec.Command("shortcuts", "run", "wallpaper", "--input-path", imagePath)
+
+	if verbose {
+		log.Printf("Desktop: Executing command: shortcuts run wallpaper --input-path %s", imagePath)
+		cmd.Stdout = os.Stdout
+		cmd.Stderr = os.Stderr
+	}
+
+	if err := cmd.Run(); err != nil {
+		if verbose {
+			log.Printf("Desktop: ERROR - shortcuts command failed: %v", err)
+		}
+		return fmt.Errorf("failed to set wallpaper via shortcuts: %w", err)
+	}
+
+	if verbose {
+		log.Printf("Desktop: Shortcuts command executed successfully")
+	}
+
 	return nil
 }
 

@@ -7,8 +7,8 @@ services:
     environment:
       - TZ=America/Los_Angeles
     volumes:
-      - /home/blake.linux/code/weatherdesktop/assets:/app/assets
-      - /home/blake.linux/code/weatherdesktop/rendered:/app/rendered
+      - ./assets:/app/assets
+      - ./rendered:/app/rendered
     working_dir: /app
     init: true
     restart: unless-stopped

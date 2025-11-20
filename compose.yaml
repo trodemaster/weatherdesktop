@@ -1,0 +1,22 @@
+services:
+  wd-worker:
+    build:
+      context: .
+      dockerfile: Dockerfile
+    container_name: wd-worker
+    environment:
+      - TZ=America/Los_Angeles
+    volumes:
+      - ./assets:/app/assets
+      - ./rendered:/app/rendered
+    working_dir: /app
+    init: true
+    restart: unless-stopped
+    healthcheck:
+      test: ["CMD", "test", "-f", "/app/wd-worker"]
+      interval: 10s
+      timeout: 5s
+      retries: 3
+    # Keep container running - worker receives commands via exec
+    command: ["sh", "-c", "while true; do sleep 3600; done"]
+

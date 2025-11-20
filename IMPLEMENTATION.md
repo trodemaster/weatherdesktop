@@ -260,34 +260,20 @@ ENTRYPOINT ["/app/wd-worker"]
 
 **CGO with Objective-C:**
 - Direct NSWorkspace API calls (`[[NSWorkspace sharedWorkspace] setDesktopImageURL:forScreen:options:error:]`)
-- Sets wallpaper on all screens
+- Sets wallpaper on all screens automatically
+- Merges existing screen options to preserve per-screen settings (fill color, etc.)
 - Clears wallpaper cache for immediate update
+- 0.5 second delay after setting to allow system to process
 
 **Host-only:**
 - Desktop setting must run on macOS host (cannot use Docker)
 - CGO requires Xcode Command Line Tools
 
-**macOS Sequoia (15.x) / Tahoe (26.x) Issue:**
-- **KNOWN BUG**: `setDesktopImageURL` reports success but wallpaper extension system fails
-- Error: `WallpaperExtensionKit.WallpaperExtensionError (3)` - "Failed to create snapshot to export"
-- Error: `NSCocoaErrorDomain (4099)` - File access/sandboxing issues
-- API accepts the call but extension system reverts to default wallpaper after ~45 seconds
-- No newer public API available (checked macOS 26.0 SDK)
-- Private frameworks (`Wallpaper.framework`, `WallpaperExtensionKit.framework`) exist but are undocumented Swift-only XPC APIs
-
-**Investigation Findings:**
-- API must be called from main thread (documented requirement)
-- File verification shows API sets wallpaper, but `desktopImageURLForScreen` immediately returns default
-- WallpaperAgent processes XPC message `setLegacyDesktopPictureConfiguration` but fails during export
-- Extension system appears to require specific file location or permissions that are not documented
-
-**Workaround Status:**
-- AppleScript fallback not viable (user preference)
-- Investigating alternative approaches:
-  - File location requirements (may need to copy to `~/Library/Application Support/com.apple.wallpaper/`)
-  - File permissions/accessibility requirements
-  - Sandboxing/TCC requirements
-  - Extension system notification/refresh mechanisms
+**Multi-Display Support:**
+- Automatically detects all connected displays via `[NSScreen screens]`
+- Loops through all screens and sets wallpaper on each
+- Preserves existing screen-specific options (like fill color) when merging with new options
+- Continues even if one screen fails (logs warning but doesn't abort)
 
 ### Filename Handling
 
@@ -472,6 +458,7 @@ xcode-select --install
 - `jq` → Native Go structs
 - `ImageMagick convert` → `image/draw` + `x/image/draw`
 - `desktoppr` → CGO NSWorkspace
+- `pass_status.sh` → Go-based parser and text renderer
 
 ## Future Enhancements
 

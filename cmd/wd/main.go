@@ -5,7 +5,9 @@ import (
 	"fmt"
 	"log"
 	"os"
+	"os/exec"
 	"path/filepath"
+	"strings"
 	"time"
 
 	"github.com/trodemaster/weatherdesktop/pkg/assets"
@@ -22,6 +24,7 @@ var (
 	desktopImageFlag = flag.String("set-desktop", "", "Set desktop wallpaper from specified image file path")
 	desktopMethodFlag = flag.String("desktop-method", "cgo", "Wallpaper setting method (default: 'cgo')")
 	flushFlag       = flag.Bool("f", false, "Flush/clear assets directory")
+	uploadFlag      = flag.Bool("upload", false, "Upload latest rendered image to remote server via SCP (requires SSH_TARGET env var)")
 	debugFlag       = flag.Bool("debug", false, "Enable debug output")
 	scrapeTargetFlag = flag.String("scrape-target", "", "Test specific scrape target by name")
 	listTargetsFlag = flag.Bool("list-targets", false, "List all available scrape targets and exit")
@@ -42,6 +45,8 @@ func main() {
 		fmt.Fprintf(os.Stderr, "   -set-desktop <path>   Set desktop wallpaper from specified image file\n")
 		fmt.Fprintf(os.Stderr, "   -desktop-method <m>   Wallpaper method (default: 'cgo')\n")
 		fmt.Fprintf(os.Stderr, "   -f                    Flush assets\n")
+		fmt.Fprintf(os.Stderr, "   -upload               Upload latest rendered image to remote server via SCP\n")
+		fmt.Fprintf(os.Stderr, "                         (requires SSH_TARGET environment variable)\n")
 		fmt.Fprintf(os.Stderr, "\nDEBUG OPTIONS:\n")
 		fmt.Fprintf(os.Stderr, "   -debug                Enable debug output\n")
 		fmt.Fprintf(os.Stderr, "   -list-targets         List all available scrape targets\n")
@@ -90,6 +95,49 @@ func main() {
 			log.Fatalf("Failed to set desktop: %v", err)
 		}
 		log.Println("✓ Desktop wallpaper set successfully on all screens")
+		
+		// Upload to remote server if requested (after desktop setting)
+		if *uploadFlag {
+			scriptDir, err := filepath.Abs(filepath.Dir(os.Args[0]))
+			if err != nil {
+				scriptDir = "."
+			}
+			if err := uploadToRemote(absPath, scriptDir); err != nil {
+				log.Printf("Warning: Failed to upload to remote server: %v", err)
+			} else {
+				log.Println("✓ Image uploaded to remote server successfully")
+			}
+		}
+		return
+	}
+
+	// Handle upload-only flag (special case - just upload latest rendered image)
+	// Check if only -upload is specified (no other phase flags)
+	hasPhaseFlags := *scrapeFlag || *downloadFlag || *cropFlag || *renderFlag || *desktopFlag || *flushFlag
+	if *uploadFlag && !hasPhaseFlags {
+		// Get script directory
+		scriptDir, err := filepath.Abs(filepath.Dir(os.Args[0]))
+		if err != nil {
+			log.Fatalf("Failed to get script directory: %v", err)
+		}
+
+		// Find the most recent rendered file
+		renderedDir := filepath.Join(scriptDir, "rendered")
+		renderedPath, err := findMostRecentRendered(renderedDir)
+		if err != nil {
+			log.Fatalf("Failed to find rendered file: %v", err)
+		}
+
+		// Upload to remote server
+		if *debugFlag {
+			log.Printf("Upload: Uploading latest rendered image: %s", renderedPath)
+		} else {
+			log.Printf("Uploading latest rendered image: %s", renderedPath)
+		}
+		if err := uploadToRemote(renderedPath, scriptDir); err != nil {
+			log.Fatalf("Failed to upload to remote server: %v", err)
+		}
+		log.Println("✓ Image uploaded to remote server successfully")
 		return
 	}
 
@@ -104,7 +152,8 @@ func main() {
 
 	// Determine which phases to run
 	// If no flags set, run all phases (same logic as bash script lines 82-84)
-	// Note: desktopImageFlag is handled separately above, so we exclude it from runAll check
+	// Note: desktopImageFlag and uploadFlag are handled separately, so we exclude them from runAll check
+	// uploadFlag is also excluded because it can be used standalone or with other flags
 	runAll := !(*scrapeFlag || *downloadFlag || *cropFlag || *renderFlag || *desktopFlag || *flushFlag)
 	
 	doScrape := runAll || *scrapeFlag
@@ -210,9 +259,34 @@ func main() {
 				log.Fatalf("Failed to set desktop: %v", err)
 			}
 			log.Println("✓ Desktop wallpaper set successfully on all screens")
+			
+			// Upload to remote server if requested via flag or if SSH_TARGET env var is set (default behavior)
+			shouldUpload := *uploadFlag || os.Getenv("SSH_TARGET") != ""
+			if shouldUpload {
+				if err := uploadToRemote(renderedPath, scriptDir); err != nil {
+					log.Printf("Warning: Failed to upload to remote server: %v", err)
+				} else {
+					log.Println("✓ Image uploaded to remote server successfully")
+				}
+			}
 		}
 	} else {
 		log.Printf("Skipping desktop wallpaper (doDesktop=%v, runAll=%v, desktopFlag=%v)", doDesktop, runAll, *desktopFlag)
+		
+		// If upload flag is set but desktop wasn't set, still try to upload latest image
+		if *uploadFlag {
+			renderedDir := filepath.Join(scriptDir, "rendered")
+			renderedPath, err := findMostRecentRendered(renderedDir)
+			if err != nil {
+				log.Printf("Warning: Failed to find rendered file for upload: %v", err)
+			} else {
+				if err := uploadToRemote(renderedPath, scriptDir); err != nil {
+					log.Printf("Warning: Failed to upload to remote server: %v", err)
+				} else {
+					log.Println("✓ Image uploaded to remote server successfully")
+				}
+			}
+		}
 	}
 
 	// Optional: Copy to CDN if mounted
@@ -332,6 +406,171 @@ func copyFile(src, dst string) error {
 		return err
 	}
 	return os.WriteFile(dst, input, 0644)
+}
+
+// sshTargetInfo contains parsed information from SSH_TARGET
+type sshTargetInfo struct {
+	Host string // e.g., "wx"
+	Dir  string // e.g., "/var/www/html/weewx/stevenspass/"
+}
+
+// parseSSHTarget parses SSH_TARGET env var into host and directory
+// Format: "host:/path/to/dir" or "host:/path/to/dir/"
+func parseSSHTarget(sshTarget string) (*sshTargetInfo, error) {
+	parts := strings.SplitN(sshTarget, ":", 2)
+	if len(parts) != 2 {
+		return nil, fmt.Errorf("SSH_TARGET must be in format 'host:/path/to/dir', got: %s", sshTarget)
+	}
+
+	host := parts[0]
+	dir := parts[1]
+	
+	// Normalize directory path - ensure it ends with /
+	if !strings.HasSuffix(dir, "/") {
+		dir += "/"
+	}
+
+	return &sshTargetInfo{
+		Host: host,
+		Dir:  dir,
+	}, nil
+}
+
+// uploadToRemote uploads the latest rendered image to a remote server via SCP
+// Uses SSH_TARGET environment variable to construct the scp command
+// Uploads with original filename, then runs sed to update HTML template, and cleans up old files
+func uploadToRemote(imagePath string, scriptDir string) error {
+	sshTarget := os.Getenv("SSH_TARGET")
+	if sshTarget == "" {
+		return fmt.Errorf("SSH_TARGET environment variable is not set")
+	}
+
+	// Parse SSH_TARGET
+	targetInfo, err := parseSSHTarget(sshTarget)
+	if err != nil {
+		return fmt.Errorf("failed to parse SSH_TARGET: %w", err)
+	}
+
+	// Get original filename
+	originalFilename := filepath.Base(imagePath)
+	remotePath := targetInfo.Host + ":" + targetInfo.Dir + originalFilename
+
+	// Step 1: Upload with original filename
+	log.Printf("Upload: Executing: scp %s %s", imagePath, remotePath)
+	cmd := exec.Command("scp", imagePath, remotePath)
+	
+	if *debugFlag {
+		cmd.Stdout = os.Stdout
+		cmd.Stderr = os.Stderr
+		log.Printf("Upload: Preparing to upload %s to %s", imagePath, remotePath)
+	}
+
+	if err := cmd.Run(); err != nil {
+		return fmt.Errorf("scp command failed: %w", err)
+	}
+	log.Printf("Upload: Successfully uploaded %s to %s", originalFilename, remotePath)
+
+	// Step 2: Run sed command to update HTML template (idempotent)
+	// Update /etc/weewx/skins/stevenspass/index.html.tmpl to use the new image filename
+	// This is idempotent: it will replace any existing image filename (stevenspass.jpg or hud-*.jpg) with the current filename
+	templatePath := "/etc/weewx/skins/stevenspass/index.html.tmpl"
+	// Replace any image filename in src attribute: handles hud-*.jpg pattern
+	// Assumes template has already been manually edited to use hud-YYMMDD-HHMM.jpg format
+	// Simple pattern: just match hud-*.jpg and replace with new filename
+	sedExpr := fmt.Sprintf("s/hud-.*\\.jpg/%s/g", originalFilename)
+	// Construct command: pass directly to SSH with proper quoting
+	fullCmd := fmt.Sprintf("sed -i '%s' %s", sedExpr, templatePath)
+	sshCmd := exec.Command("ssh", targetInfo.Host, fullCmd)
+	
+	log.Printf("Upload: Executing: ssh %s '%s'", targetInfo.Host, fullCmd)
+	if *debugFlag {
+		sshCmd.Stdout = os.Stdout
+		sshCmd.Stderr = os.Stderr
+	}
+
+	if err := sshCmd.Run(); err != nil {
+		log.Printf("Upload: Warning: sed command failed (may be expected if no HTML files found): %v", err)
+		// Don't fail the entire upload if sed fails
+	} else {
+		log.Printf("Upload: Successfully updated HTML template(s)")
+	}
+
+	// Step 3: Cleanup old files (keep only N and N-1)
+	if err := cleanupOldRemoteFiles(targetInfo); err != nil {
+		log.Printf("Upload: Warning: Failed to cleanup old files: %v", err)
+		// Don't fail the entire upload if cleanup fails
+	}
+
+	return nil
+}
+
+// cleanupOldRemoteFiles removes old image files on remote, keeping only the newest and second-newest
+func cleanupOldRemoteFiles(targetInfo *sshTargetInfo) error {
+	// List all hud-*.jpg files on remote, sorted by modification time (newest first)
+	// Format: full path with modification time for sorting
+	listCmd := fmt.Sprintf("ls -t %shud-*.jpg 2>/dev/null", targetInfo.Dir)
+	sshCmd := exec.Command("ssh", targetInfo.Host, listCmd)
+	
+	output, err := sshCmd.Output()
+	if err != nil {
+		// If no files found or command fails, that's okay
+		if *debugFlag {
+			log.Printf("Upload: Cleanup: No files found or command failed: %v", err)
+		}
+		return nil
+	}
+
+	// Parse file list
+	lines := strings.Split(strings.TrimSpace(string(output)), "\n")
+	var allFiles []string
+	for _, line := range lines {
+		line = strings.TrimSpace(line)
+		if line != "" {
+			allFiles = append(allFiles, line)
+		}
+	}
+
+	if len(allFiles) <= 2 {
+		if *debugFlag {
+			log.Printf("Upload: Cleanup: Only %d file(s) found, nothing to remove", len(allFiles))
+		}
+		return nil
+	}
+
+	// Files are already sorted by modification time (newest first) from ls -t
+	// Keep the first 2 (newest and second-newest), remove the rest
+	filesToKeep := allFiles[:2]
+	filesToRemove := allFiles[2:]
+
+	if *debugFlag {
+		log.Printf("Upload: Cleanup: Keeping files: %v", filesToKeep)
+		log.Printf("Upload: Cleanup: Removing files: %v", filesToRemove)
+	}
+
+	// Remove old files
+	removedCount := 0
+	for _, file := range filesToRemove {
+		rmCmd := fmt.Sprintf("rm -f %s", file)
+		rmSSH := exec.Command("ssh", targetInfo.Host, rmCmd)
+		if *debugFlag {
+			log.Printf("Upload: Cleanup: Removing old file: %s", file)
+		}
+		if err := rmSSH.Run(); err != nil {
+			if *debugFlag {
+				log.Printf("Upload: Cleanup: Warning: Failed to remove %s: %v", file, err)
+			}
+		} else {
+			removedCount++
+		}
+	}
+
+	if removedCount > 0 {
+		log.Printf("Upload: Cleanup: Removed %d old file(s), kept 2 most recent", removedCount)
+	} else {
+		log.Printf("Upload: Cleanup: No old files to remove")
+	}
+
+	return nil
 }
 
 // listScrapeTargets lists all available scrape targets

@@ -6,3 +6,6 @@ scrape/.venv_scrape
 wd
 wd-worker
 **/*.html
+*.psd
+.env
+.envrc

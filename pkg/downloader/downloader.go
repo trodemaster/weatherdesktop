@@ -76,26 +76,26 @@ func New(manager *assets.Manager) *Downloader {
 
 // DownloadAll downloads all configured assets concurrently
 func (d *Downloader) DownloadAll() error {
-	downloadAssets := d.manager.GetDownloadAssets()
-	
+	downloadTargets := d.manager.GetDownloadTargets()
+
 	var wg sync.WaitGroup
-	errorsChan := make(chan error, len(downloadAssets))
-	
-	for _, asset := range downloadAssets {
+	errorsChan := make(chan error, len(downloadTargets))
+
+	for _, target := range downloadTargets {
 		wg.Add(1)
-		go func(a assets.Asset) {
+		go func(t assets.DownloadTarget) {
 			defer wg.Done()
-			
-			log.Printf("Downloading %s from %s", a.Name, a.URL)
-			
-			if err := d.downloadWithRetry(a.URL, a.LocalPath, 3); err != nil {
-				log.Printf("Failed to download %s: %v, creating fallback image", a.Name, err)
-				if err := d.createFallbackImage(a.LocalPath); err != nil {
-					errorsChan <- fmt.Errorf("failed to create fallback for %s: %w", a.Name, err)
+
+			log.Printf("Downloading %s from %s", t.Name, t.URL)
+
+			if err := d.downloadWithRetry(t.URL, t.OutputPath, 3); err != nil {
+				log.Printf("Failed to download %s: %v, creating fallback image", t.Name, err)
+				if err := d.createFallbackImage(t.OutputPath); err != nil {
+					errorsChan <- fmt.Errorf("failed to create fallback for %s: %w", t.Name, err)
 					return
 				}
 			}
-		}(asset)
+		}(target)
 	}
 	
 	wg.Wait()

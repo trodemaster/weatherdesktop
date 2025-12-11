@@ -189,11 +189,11 @@ func (s *Scraper) scrapeTarget(target assets.ScrapeTarget) error {
 	if waitTime == 0 {
 		waitTime = 1000 // Default 1 second
 	}
-	
+
 	if s.debug {
 		log.Printf("⏰ Waiting %dms for element...", waitTime)
 	}
-	
+
 	locator := page.Locator(target.Selector)
 	if err := locator.WaitFor(playwright.LocatorWaitForOptions{
 		Timeout: playwright.Float(float64(waitTime)),
@@ -204,6 +204,47 @@ func (s *Scraper) scrapeTarget(target assets.ScrapeTarget) error {
 		}
 	} else if s.debug {
 		log.Printf("✓ Element found: %s", target.Selector)
+	}
+
+	// For NWAC sites, wait for actual content to load (charts/graphs)
+	// This is more reliable than simple time-based waits
+	if strings.Contains(target.URL, "nwac.us") {
+		if s.debug {
+			log.Printf("⏰ Waiting for NWAC content to fully render...")
+		}
+
+		// Strategy 1: Wait for canvas or SVG elements (charts are usually rendered with these)
+		contentSelector := target.Selector + " canvas, " + target.Selector + " svg"
+		contentLocator := page.Locator(contentSelector)
+
+		if err := contentLocator.First().WaitFor(playwright.LocatorWaitForOptions{
+			Timeout: playwright.Float(20000), // 20 second timeout for chart rendering
+			State:   playwright.WaitForSelectorStateVisible,
+		}); err != nil {
+			if s.debug {
+				log.Printf("⚠️  Chart elements (canvas/svg) not found: %v", err)
+				log.Printf("⏰ Falling back to network idle wait...")
+			}
+
+			// Fallback: Wait for network idle
+			if err := page.WaitForLoadState(playwright.PageWaitForLoadStateOptions{
+				State:   playwright.LoadStateNetworkidle,
+				Timeout: playwright.Float(15000),
+			}); err != nil {
+				if s.debug {
+					log.Printf("⚠️  Network idle timeout: %v", err)
+				}
+			}
+		} else if s.debug {
+			log.Printf("✓ Chart content detected")
+		}
+
+		// Additional wait for any animations/transitions
+		extraWait := 1500 // 1.5 seconds
+		if s.debug {
+			log.Printf("⏰ Additional %dms wait for animations...", extraWait)
+		}
+		time.Sleep(time.Duration(extraWait) * time.Millisecond)
 	}
 	
 	// Take screenshot of the element
@@ -245,28 +286,121 @@ func (s *Scraper) scrapeTarget(target assets.ScrapeTarget) error {
 
 // ScrapeHTML extracts HTML from a page element
 func (s *Scraper) ScrapeHTML(target assets.ScrapeTarget) error {
+	if s.debug {
+		log.Printf("\n🌐 Scraping HTML: %s", target.Name)
+		log.Printf("   URL: %s", target.URL)
+		log.Printf("   Selector: %s", target.Selector)
+	}
+	
 	page, err := s.browser.NewPage()
 	if err != nil {
 		return fmt.Errorf("failed to create page: %w", err)
 	}
 	defer page.Close()
 	
-	if _, err := page.Goto(target.URL); err != nil {
+	// Set up console logging in debug mode
+	if s.debug {
+		page.On("console", func(msg playwright.ConsoleMessage) {
+			log.Printf("   [Browser Console] %s: %s", msg.Type(), msg.Text())
+		})
+		page.On("pageerror", func(err error) {
+			log.Printf("   [Page Error] %v", err)
+		})
+	}
+	
+	// Navigate with timeout and wait strategy
+	startNav := time.Now()
+	if s.debug {
+		log.Printf("⏳ Navigating to URL...")
+	}
+	
+	// Use domcontentloaded like the image scraper - faster and more reliable
+	if _, err := page.Goto(target.URL, playwright.PageGotoOptions{
+		WaitUntil: playwright.WaitUntilStateDomcontentloaded, // Same as image scraper
+		Timeout:   playwright.Float(30000), // 30 second timeout for slow WSDOT page
+	}); err != nil {
+		// Log page content on failure for debugging
+		if s.debug {
+			if content, contentErr := page.Content(); contentErr == nil {
+				log.Printf("   [Page Content Preview] %s", content[:min(200, len(content))])
+			}
+		}
 		return fmt.Errorf("navigation failed: %w", err)
 	}
 	
-	// Wait for element
-	locator := page.Locator(target.Selector)
-	if err := locator.WaitFor(playwright.LocatorWaitForOptions{
-		Timeout: playwright.Float(float64(target.WaitTime)),
-	}); err != nil {
-		log.Printf("Warning: Element not found: %v", err)
+	if s.debug {
+		log.Printf("✓ Navigation complete (%.2fs)", time.Since(startNav).Seconds())
 	}
 	
-	// Get inner HTML
-	html, err := locator.InnerHTML()
+	// Add extra wait time for Vue.js to render (WSDOT is a Vue.js app)
+	additionalWait := 3000 // 3 seconds for Vue to hydrate
+	if s.debug {
+		log.Printf("⏰ Waiting additional %dms for Vue.js to render...", additionalWait)
+	}
+	time.Sleep(time.Duration(additionalWait) * time.Millisecond)
+	
+	// Wait for element
+	waitTime := target.WaitTime
+	if waitTime == 0 {
+		waitTime = 1000 // Default 1 second
+	}
+	
+	if s.debug {
+		log.Printf("⏰ Waiting %dms for element...", waitTime)
+	}
+	
+	locator := page.Locator(target.Selector)
+	if err := locator.WaitFor(playwright.LocatorWaitForOptions{
+		Timeout: playwright.Float(float64(waitTime)),
+		State:   playwright.WaitForSelectorStateVisible,
+	}); err != nil {
+		if s.debug {
+			log.Printf("⚠️  Element not found after %dms, attempting extraction anyway: %v", waitTime, err)
+		}
+		// Don't fail immediately - try to extract anyway
+	}
+	
+	if s.debug {
+		log.Printf("✓ Proceeding with HTML extraction")
+	}
+	
+	// Get inner HTML using evaluate (more reliable than InnerHTML for Vue.js pages)
+	if s.debug {
+		log.Printf("📄 Extracting HTML with evaluate method...")
+	}
+	
+	// Use Page.Evaluate to extract HTML directly from DOM
+	result, err := page.Evaluate(fmt.Sprintf(`() => {
+		const el = document.querySelector('%s');
+		if (!el) {
+			console.log('Element not found with selector: %s');
+			return null;
+		}
+		console.log('Element found, extracting HTML...');
+		return el.innerHTML;
+	}`, target.Selector, target.Selector))
+	
 	if err != nil {
-		return fmt.Errorf("failed to get HTML: %w", err)
+		if s.debug {
+			log.Printf("⚠️  Evaluate failed: %v", err)
+		}
+		return fmt.Errorf("failed to evaluate: %w", err)
+	}
+	
+	if result == nil {
+		return fmt.Errorf("selector '%s' did not match any element", target.Selector)
+	}
+	
+	html, ok := result.(string)
+	if !ok || html == "" {
+		return fmt.Errorf("extracted HTML is empty or invalid type")
+	}
+	
+	if s.debug {
+		log.Printf("📄 HTML extracted: %d bytes", len(html))
+		if len(html) < 500 {
+			log.Printf("📄 Content preview: %s", html[:min(len(html), 200)])
+		}
 	}
 	
 	// Save HTML
@@ -274,7 +408,12 @@ func (s *Scraper) ScrapeHTML(target assets.ScrapeTarget) error {
 		return fmt.Errorf("failed to save HTML: %w", err)
 	}
 	
-	log.Printf("Saved HTML to %s", target.OutputPath)
+	if s.debug {
+		log.Printf("✓ Saved to: %s", target.OutputPath)
+	} else {
+		log.Printf("Saved HTML to %s", target.OutputPath)
+	}
+	
 	return nil
 }
 

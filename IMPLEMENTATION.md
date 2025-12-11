@@ -2,6 +2,34 @@
 
 Technical documentation for developers and contributors.
 
+## Recent Changes (December 2025)
+
+### WSDOT Pass Status Scraping Fixes
+
+**Issue**: WSDOT pass closure detection was not working due to outdated CSS selector and timeout issues.
+
+**Root Cause**: 
+- Old selector `#index > div:nth-child(7) > div.full-width.column-container.mountain-pass > div.column-1` relied on DOM structure that changed
+- WSDOT website migrated to Vue.js, requiring different wait strategies
+- `networkidle` wait strategy timed out due to continuous network activity
+
+**Solutions Implemented**:
+1. **Updated CSS Selector**: Changed to `.full-width.column-container.mountain-pass .column-1` (class-based, more reliable)
+2. **Improved Wait Strategy**: 
+   - Use `domcontentloaded` instead of `networkidle` (same as image scrapers)
+   - Added 3-second additional wait for Vue.js hydration
+   - Increased element wait time to 10 seconds
+3. **Better HTML Extraction**: Use `Page.Evaluate()` instead of `Locator.InnerHTML()` for more reliable extraction from Vue.js-rendered DOM
+4. **Graphics-Based Rendering**: Replaced text rendering with pre-rendered PNG graphics (hw2_*.png files)
+5. **Docker Optimization**: Added `.dockerignore` to exclude large `rendered/` directory from build context
+
+**Test Files**: Created comprehensive test HTML files in `testfiles/` directory:
+- `closed_wsdot_stevens_pass_2025_12_10_rain.html` - Current closed status
+- `closed_wsdot_stevens_pass.html` - Historical closed status
+- `open_wsdot_stevens_pass_2024_01_10.html` - Open status
+
+**Result**: Pass closure detection now works correctly, displaying appropriate graphics based on east/west closure status.
+
 ## Architecture
 
 ### Hybrid Docker + Host Design
@@ -36,6 +64,7 @@ This design isolates browser automation (Playwright + WebKit) in a container whi
 │  Shared Volumes:                                         │
 │  ./assets   ←→  /app/assets   (scraped/downloaded)      │
 │  ./rendered ←→  /app/rendered (final composites)        │
+│  ./graphics ←→  /app/graphics (pass status graphics)    │
 └─────────────────────────────────────────────────────────┘
 ```
 
@@ -104,6 +133,7 @@ services:
     volumes:
       - ./assets:/app/assets
       - ./rendered:/app/rendered
+      - ./graphics:/app/graphics
     working_dir: /app
     init: true                    # Tini for process management
     restart: unless-stopped
@@ -114,7 +144,7 @@ services:
 
 **Key Points:**
 - **Persistent container**: Stays running to avoid startup overhead
-- **Volume mounts**: Share `assets/` and `rendered/` directories with host
+- **Volume mounts**: Share `assets/`, `rendered/`, and `graphics/` directories with host
 - **init: true**: Uses Docker's built-in Tini for signal handling and zombie reaping
 - **Timezone**: Set to PST for consistent filename timestamps
 
@@ -187,6 +217,11 @@ ENTRYPOINT ["/app/wd-worker"]
   - Manual deletion or automated cleanup scripts should NEVER target this directory
   - The `clean` Makefile target has been updated to preserve rendered images
 
+**`./graphics ↔ /app/graphics`**
+- Pre-rendered pass status graphics (hw2_*.png files)
+- Used for pass closure status display
+- Graphics are selected based on parsed WSDOT status and copied to `assets/pass_conditions.png`
+
 ## Scraping Implementation
 
 ### Playwright Configuration
@@ -222,9 +257,15 @@ ENTRYPOINT ["/app/wd-worker"]
 - Selectors configured per target in `pkg/assets/manager.go`
 
 **WSDOT Pass Status:**
-- Selector: `#index > div:nth-child(7) > div.full-width.column-container.mountain-pass > div.column-1`
+- Selector: `.full-width.column-container.mountain-pass .column-1`
 - Type: HTML extraction (not screenshot)
-- Parsed for pass conditions text
+- Wait time: 10000ms (10 seconds for Vue.js to render)
+- Navigation: Uses `domcontentloaded` wait strategy (same as image scrapers)
+- Additional wait: 3000ms after navigation for Vue.js hydration
+- Extraction: Uses `Page.Evaluate()` for reliable HTML extraction from Vue.js-rendered DOM
+- HTML structure: Uses `class="condition"` wrappers with `class="conditionLabel"` and `class="conditionValue"` children
+- Parsed for eastbound/westbound closure status
+- **Graphics-based rendering**: Uses pre-rendered PNG graphics instead of text
 
 ## Image Processing
 
@@ -248,11 +289,18 @@ ENTRYPOINT ["/app/wd-worker"]
 - **Layering**: Uses stdlib `image/draw.Draw()` for compositing
 - **15 layers**: Positioned at precise coordinates from `pkg/assets/manager.go`
 
-### Text Renderer
+### Pass Status Graphics
 
-- **Font**: Uses `golang.org/x/image/font` for text drawing
-- **Word wrapping**: Custom implementation for pass conditions
-- **Centering**: Calculates text bounds for alignment
+- **Graphics-based system**: Uses pre-rendered PNG graphics instead of text rendering
+- **Graphics location**: `graphics/` directory (mounted in Docker container)
+- **Graphic selection logic**:
+  - `hw2_open.png` - Pass is open (neither direction closed)
+  - `hw2_closed.png` - Both directions closed
+  - `hw2_closed_e.png` - Only eastbound closed
+  - `hw2_closed_w.png` - Only westbound closed
+- **Closure detection**: Parses WSDOT HTML to detect "Closed" status in eastbound/westbound conditions
+- **File copying**: Selected graphic is copied to `assets/pass_conditions.png` for compositing
+- **Fallback**: Uses `hw2_open.png` if parsing fails or graphic not found
 
 ## Desktop Setting
 
@@ -412,11 +460,21 @@ docker compose up -d
 - Check network connectivity
 - Verify target URLs are accessible
 - Increase wait times in `pkg/assets/manager.go` if needed
+- For Vue.js/React sites, use `domcontentloaded` wait strategy (not `networkidle`)
+
+**WSDOT Pass Status scraping:**
+- **Issue**: WSDOT website uses Vue.js and requires additional wait time for hydration
+- **Solution**: Added 3-second wait after `domcontentloaded` for Vue.js to render
+- **Selector**: Updated from `#index > div:nth-child(7)...` to `.full-width.column-container.mountain-pass .column-1`
+- **Extraction**: Uses `Page.Evaluate()` instead of `Locator.InnerHTML()` for more reliable extraction
+- **Timeout**: 30 seconds for navigation, 10 seconds for element wait
+- **Test files**: See `testfiles/` directory for HTML samples (closed/open states)
 
 **Selector failures:**
 - Use debug mode to see what's being captured
 - Check browser logs in container: `make docker-logs`
 - Update selectors in `pkg/assets/manager.go`
+- For dynamic sites, verify element exists after JavaScript renders
 
 **TLS certificate errors:**
 - CA certificates are installed in Dockerfile
@@ -458,7 +516,7 @@ xcode-select --install
 - `jq` → Native Go structs
 - `ImageMagick convert` → `image/draw` + `x/image/draw`
 - `desktoppr` → CGO NSWorkspace
-- `pass_status.sh` → Go-based parser and text renderer
+- `pass_status.sh` → Go-based parser with graphics-based rendering
 
 ## Future Enhancements
 

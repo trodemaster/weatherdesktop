@@ -1,0 +1,31 @@
+# Exclude rendered images (these are archived, not needed in build)
+rendered/
+
+# Exclude assets (will be mounted as volume at runtime)
+assets/
+
+# Exclude build artifacts
+wd
+wd-worker
+
+# Exclude version control
+.git/
+.gitignore
+
+# Exclude documentation
+*.md
+LICENSE
+
+# Exclude IDE files
+.vscode/
+.idea/
+*.swp
+*.swo
+*~
+
+# Exclude macOS files
+.DS_Store
+
+# Exclude test files
+*_test.go
+

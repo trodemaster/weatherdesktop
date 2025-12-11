@@ -43,27 +43,23 @@ func (p *Processor) ProcessAll() error {
 // processAsset crops and/or resizes a single asset
 func (p *Processor) processAsset(asset assets.Asset) error {
 	// Load source image
-	img, err := p.loadImage(asset.LocalPath)
+	img, err := p.loadImage(asset.InputPath)
 	if err != nil {
 		return fmt.Errorf("failed to load image: %w", err)
 	}
-	
-	// Crop if needed
-	if asset.CropParams != nil {
-		img = p.crop(img, asset.CropParams)
-	}
-	
-	// Resize if needed
-	if asset.ResizeParams != nil {
-		img = p.resize(img, asset.ResizeParams)
-	}
-	
+
+	// Crop to specified rectangle
+	img = p.crop(img, asset.CropRect)
+
+	// Resize to target size
+	img = p.resize(img, asset.TargetSize)
+
 	// Save processed image
-	if err := p.saveImage(img, asset.ProcessedPath); err != nil {
+	if err := p.saveImage(img, asset.OutputPath); err != nil {
 		return fmt.Errorf("failed to save image: %w", err)
 	}
-	
-	log.Printf("Saved processed image to %s", asset.ProcessedPath)
+
+	log.Printf("Saved processed image to %s", asset.OutputPath)
 	return nil
 }
 
@@ -85,62 +81,41 @@ func (p *Processor) loadImage(path string) (image.Image, error) {
 }
 
 // crop crops an image to the specified rectangle
-func (p *Processor) crop(img image.Image, params *assets.CropParams) image.Image {
-	// Define crop rectangle
-	rect := image.Rect(params.X, params.Y, params.X+params.Width, params.Y+params.Height)
-	
+func (p *Processor) crop(img image.Image, cropRect image.Rectangle) image.Image {
 	// Use SubImage if available (most image types support it)
 	type subImager interface {
 		SubImage(r image.Rectangle) image.Image
 	}
-	
+
 	if si, ok := img.(subImager); ok {
-		return si.SubImage(rect)
+		return si.SubImage(cropRect)
 	}
-	
+
 	// Fallback: manually copy pixels (should rarely be needed)
-	cropped := image.NewRGBA(image.Rect(0, 0, params.Width, params.Height))
-	draw.Draw(cropped, cropped.Bounds(), img, rect.Min, draw.Src)
+	width := cropRect.Dx()
+	height := cropRect.Dy()
+	cropped := image.NewRGBA(image.Rect(0, 0, width, height))
+	draw.Draw(cropped, cropped.Bounds(), img, cropRect.Min, draw.Src)
 	return cropped
 }
 
-// resize resizes an image according to the parameters
-func (p *Processor) resize(img image.Image, params *assets.ResizeParams) image.Image {
+// resize resizes an image to the target size
+func (p *Processor) resize(img image.Image, targetSize image.Point) image.Image {
 	bounds := img.Bounds()
-	origWidth := bounds.Dx()
-	origHeight := bounds.Dy()
-	
-	var newWidth, newHeight int
-	
-	if params.Percent > 0 {
-		// Resize by percentage
-		newWidth = origWidth * params.Percent / 100
-		newHeight = origHeight * params.Percent / 100
-	} else if params.Width > 0 && params.Height > 0 {
-		// Resize to exact dimensions
-		newWidth = params.Width
-		newHeight = params.Height
-	} else if params.Width > 0 {
-		// Resize width, maintain aspect ratio
-		newWidth = params.Width
-		aspectRatio := float64(origHeight) / float64(origWidth)
-		newHeight = int(float64(newWidth) * aspectRatio)
-	} else if params.Height > 0 {
-		// Resize height, maintain aspect ratio
-		newHeight = params.Height
-		aspectRatio := float64(origWidth) / float64(origHeight)
-		newWidth = int(float64(newHeight) * aspectRatio)
-	} else {
-		// No resize needed
+	newWidth := targetSize.X
+	newHeight := targetSize.Y
+
+	// If target size is zero, return original image
+	if newWidth == 0 && newHeight == 0 {
 		return img
 	}
-	
+
 	// Create destination image
 	dst := image.NewRGBA(image.Rect(0, 0, newWidth, newHeight))
-	
+
 	// Use CatmullRom interpolation for high-quality resizing
 	draw.CatmullRom.Scale(dst, dst.Bounds(), img, bounds, draw.Over, nil)
-	
+
 	return dst
 }
 

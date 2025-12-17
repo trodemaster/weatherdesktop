@@ -61,6 +61,11 @@ func (m *Manager) GetDownloadTargets() []DownloadTarget {
 			OutputPath: filepath.Join(m.AssetsDir, "stevenspassjupiter.jpg"),
 		},
 		{
+			Name:       "Stevens Pass Skyline",
+			URL:        "https://streamer8.brownrice.com/cam-images/stevenspassskyline.jpg",
+			OutputPath: filepath.Join(m.AssetsDir, "stevenspassskyline.jpg"),
+		},
+		{
 			Name:       "WSDOT E Stevens Summit",
 			URL:        "https://images.wsdot.wa.gov/nc/002vc06458.jpg",
 			OutputPath: filepath.Join(m.AssetsDir, "wsdot_e_stevens_summit.jpg"),
@@ -162,7 +167,7 @@ func (m *Manager) GetCropAssets() []Asset {
 			Name:       "Background Satellite",
 			InputPath:  filepath.Join(m.AssetsDir, "GOES18_north_pacific.jpg"),
 			OutputPath: filepath.Join(m.AssetsDir, "background_s.jpg"),
-			CropRect:   image.Rect(1200, 50, 5040, 2210),
+			CropRect:   image.Rect(0, 0, 7200, 4050),
 			TargetSize: image.Point{X: 3840, Y: 2160},
 		},
 		{
@@ -225,6 +230,7 @@ func (m *Manager) GetCompositeLayout() []CompositeLayer {
 		{ImagePath: filepath.Join(m.AssetsDir, "wsdot_stevens_pass_b.jpg"), Position: image.Point{X: 1950, Y: 20}},
 		{ImagePath: filepath.Join(m.AssetsDir, "wsdot_e_stevens_summit.jpg"), Position: image.Point{X: 2360, Y: 20}},
 		{ImagePath: filepath.Join(m.AssetsDir, "stevenspassjupiter.jpg"), Position: image.Point{X: 900, Y: 285}},
+		{ImagePath: filepath.Join(m.AssetsDir, "stevenspassskyline.jpg"), Position: image.Point{X: 900, Y: 1050}},
 		{ImagePath: filepath.Join(m.AssetsDir, "stevenspasssnowstake_s.jpg"), Position: image.Point{X: 910, Y: 1730}},
 		{ImagePath: filepath.Join(m.AssetsDir, "stevenspasscourtyard_s.jpg"), Position: image.Point{X: 1600, Y: 1730}},
 		{ImagePath: filepath.Join(m.AssetsDir, "pass_conditions.png"), Position: image.Point{X: 3050, Y: 420}},

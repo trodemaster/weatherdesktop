@@ -4,6 +4,42 @@ Technical documentation for developers and contributors.
 
 ## Recent Changes (December 2025)
 
+### Image Cropping and Positioning Updates (December 15, 2025)
+
+**Changes Made:**
+1. **Fixed NWAC Avalanche Forecast Cropping Regression**:
+   - Corrected crop parameters that were causing search bar to show and bottom clipping
+   - NWAC Avalanche Forecast Map: Updated from `Rect(0, 0, 500, 500)` to `Rect(65, 110, 465, 630)` with target size `400x520` (maintains aspect ratio)
+   - NWAC Stevens Observations: Corrected from `Rect(0, 0, 870, 870)` to `Rect(0, 0, 1140, 1439)` with 75% resize
+   - Weather.gov Extended Forecast: Fixed from `Rect(0, 0, 1150, 250)` to `Rect(0, 100, 1146, 400)` to skip header
+
+2. **NWAC Stevens Avalanche Forecast**:
+   - Removed processed `_s.jpg` version (no longer needed)
+   - Now uses raw PNG directly in composite at position (3100, 60)
+   - Eliminated unnecessary cropping/resizing step
+
+3. **Highway 2 Pass Status Graphic**:
+   - Moved from X:3150 to X:3050 (100 pixels left) to prevent overlap with avalanche forecast
+   - Added logic to skip graphic display when pass is completely open (both directions)
+   - When pass is open, removes any existing `pass_conditions.png` file
+
+4. **Weather.gov Extended Forecast Positioning**:
+   - Moved up 50 pixels from Y:1860 to Y:1810 in composite layout
+
+5. **Stevens Pass Skyline Camera Added**:
+   - Added download target: `https://streamer8.brownrice.com/cam-images/stevenspassskyline.jpg`
+   - Positioned at (900, 1055) - below Jupiter camera with 50px clearance
+   - No cropping or resizing applied (uses raw 1280x720 image)
+
+6. **GOES18 Background Satellite Crop Reverted**:
+   - Reverted from custom crop `Rect(1200, 50, 5040, 2210)` back to original `Rect(0, 0, 7200, 4050)`
+   - Returns to full wide-view background satellite image
+
+**Root Cause of Regressions:**
+- When converting from old `CropParams{X, Y, Width, Height}` to new `image.Rect(x0, y0, x1, y1)` system, some coordinates were incorrectly specified
+- Old system used starting position + dimensions; new system uses top-left and bottom-right corner coordinates
+- Incorrect conversion caused cropping from wrong positions and aspect ratio distortion
+
 ### WSDOT Pass Status Scraping Fixes
 
 **Issue**: WSDOT pass closure detection was not working due to outdated CSS selector and timeout issues.
@@ -517,6 +553,11 @@ xcode-select --install
 - `ImageMagick convert` → `image/draw` + `x/image/draw`
 - `desktoppr` → CGO NSWorkspace
 - `pass_status.sh` → Go-based parser with graphics-based rendering
+
+## Upcoming Tasks
+
+### Next Items
+- **Add Stevens Pass School Camera**: Add download target for `https://streamer3.brownrice.com/cam-images/stevenspassschool.jpg` and position in composite layout
 
 ## Future Enhancements
 

@@ -66,6 +66,11 @@ func (m *Manager) GetDownloadTargets() []DownloadTarget {
 			OutputPath: filepath.Join(m.AssetsDir, "stevenspassskyline.jpg"),
 		},
 		{
+			Name:       "Stevens Pass School",
+			URL:        "https://streamer3.brownrice.com/cam-images/stevenspassschool.jpg",
+			OutputPath: filepath.Join(m.AssetsDir, "stevenspassschool.jpg"),
+		},
+		{
 			Name:       "WSDOT E Stevens Summit",
 			URL:        "https://images.wsdot.wa.gov/nc/002vc06458.jpg",
 			OutputPath: filepath.Join(m.AssetsDir, "wsdot_e_stevens_summit.jpg"),
@@ -206,11 +211,39 @@ func (m *Manager) GetCropAssets() []Asset {
 			TargetSize: image.Point{X: 1146, Y: 300},
 		},
 		{
+			Name:       "Weather.gov Hourly Forecast",
+			InputPath:  filepath.Join(m.AssetsDir, "weather_gov_hourly_forecast.png"),
+			OutputPath: filepath.Join(m.AssetsDir, "weather_gov_hourly_forecast_s.jpg"),
+			CropRect:   image.Rect(0, 0, 800, 871),
+			TargetSize: image.Point{X: 855, Y: 930},
+		},
+		{
 			Name:       "WSDOT Stevens Pass (Big)",
 			InputPath:  filepath.Join(m.AssetsDir, "wsdot_stevens_pass.jpg"),
 			OutputPath: filepath.Join(m.AssetsDir, "wsdot_stevens_pass_b.jpg"),
 			CropRect:   image.Rect(0, 0, 400, 225),
 			TargetSize: image.Point{X: 400, Y: 225},
+		},
+		{
+			Name:       "Stevens Pass Jupiter (Scaled)",
+			InputPath:  filepath.Join(m.AssetsDir, "stevenspassjupiter.jpg"),
+			OutputPath: filepath.Join(m.AssetsDir, "stevenspassjupiter_s.jpg"),
+			CropRect:   image.Rect(0, 0, 1280, 720),
+			TargetSize: image.Point{X: 1075, Y: 605},
+		},
+		{
+			Name:       "Stevens Pass Skyline (Scaled)",
+			InputPath:  filepath.Join(m.AssetsDir, "stevenspassskyline.jpg"),
+			OutputPath: filepath.Join(m.AssetsDir, "stevenspassskyline_s.jpg"),
+			CropRect:   image.Rect(0, 0, 1280, 720),
+			TargetSize: image.Point{X: 1075, Y: 605},
+		},
+		{
+			Name:       "Stevens Pass School (Scaled)",
+			InputPath:  filepath.Join(m.AssetsDir, "stevenspassschool.jpg"),
+			OutputPath: filepath.Join(m.AssetsDir, "stevenspassschool_s.jpg"),
+			CropRect:   image.Rect(0, 0, 1280, 720),
+			TargetSize: image.Point{X: 1075, Y: 605},
 		},
 	}
 }
@@ -220,7 +253,7 @@ func (m *Manager) GetCropAssets() []Asset {
 func (m *Manager) GetCompositeLayout() []CompositeLayer {
 	return []CompositeLayer{
 		{ImagePath: filepath.Join(m.AssetsDir, "background_s.jpg"), Position: image.Point{X: 0, Y: 0}},
-		{ImagePath: filepath.Join(m.AssetsDir, "weather_gov_hourly_forecast.png"), Position: image.Point{X: 20, Y: 1130}},
+		{ImagePath: filepath.Join(m.AssetsDir, "weather_gov_hourly_forecast_s.jpg"), Position: image.Point{X: 20, Y: 1130}},
 		{ImagePath: filepath.Join(m.AssetsDir, "weather_gov_extended_forecast_s.jpg"), Position: image.Point{X: 2680, Y: 1810}},
 		{ImagePath: filepath.Join(m.AssetsDir, "nwac_avalanche_forcast_s.jpg"), Position: image.Point{X: 3420, Y: 420}},
 		{ImagePath: filepath.Join(m.AssetsDir, "nwac_stevens_observations_s.jpg"), Position: image.Point{X: 20, Y: 20}},
@@ -229,10 +262,11 @@ func (m *Manager) GetCompositeLayout() []CompositeLayer {
 		{ImagePath: filepath.Join(m.AssetsDir, "wsdot_big_windy.jpg"), Position: image.Point{X: 1600, Y: 20}},
 		{ImagePath: filepath.Join(m.AssetsDir, "wsdot_stevens_pass_b.jpg"), Position: image.Point{X: 1950, Y: 20}},
 		{ImagePath: filepath.Join(m.AssetsDir, "wsdot_e_stevens_summit.jpg"), Position: image.Point{X: 2360, Y: 20}},
-		{ImagePath: filepath.Join(m.AssetsDir, "stevenspassjupiter.jpg"), Position: image.Point{X: 900, Y: 285}},
-		{ImagePath: filepath.Join(m.AssetsDir, "stevenspassskyline.jpg"), Position: image.Point{X: 900, Y: 1050}},
-		{ImagePath: filepath.Join(m.AssetsDir, "stevenspasssnowstake_s.jpg"), Position: image.Point{X: 910, Y: 1730}},
-		{ImagePath: filepath.Join(m.AssetsDir, "stevenspasscourtyard_s.jpg"), Position: image.Point{X: 1600, Y: 1730}},
+		{ImagePath: filepath.Join(m.AssetsDir, "stevenspassjupiter_s.jpg"), Position: image.Point{X: 905, Y: 285}},
+		{ImagePath: filepath.Join(m.AssetsDir, "stevenspassskyline_s.jpg"), Position: image.Point{X: 905, Y: 920}},
+		{ImagePath: filepath.Join(m.AssetsDir, "stevenspassschool_s.jpg"), Position: image.Point{X: 905, Y: 1555}},
+		{ImagePath: filepath.Join(m.AssetsDir, "stevenspasssnowstake_s.jpg"), Position: image.Point{X: 2010, Y: 285}},
+		{ImagePath: filepath.Join(m.AssetsDir, "stevenspasscourtyard_s.jpg"), Position: image.Point{X: 2010, Y: 697}},
 		{ImagePath: filepath.Join(m.AssetsDir, "pass_conditions.png"), Position: image.Point{X: 3050, Y: 420}},
 		{ImagePath: filepath.Join(m.AssetsDir, "nwac_stevens_avalanche_forcast.png"), Position: image.Point{X: 3100, Y: 60}},
 	}

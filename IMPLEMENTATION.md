@@ -35,6 +35,24 @@ Technical documentation for developers and contributors.
    - Reverted from custom crop `Rect(1200, 50, 5040, 2210)` back to original `Rect(0, 0, 7200, 4050)`
    - Returns to full wide-view background satellite image
 
+7. **Stevens Pass School Camera Added**:
+   - Added download target: `https://streamer3.brownrice.com/cam-images/stevenspassschool.jpg`
+   - Positioned at (900, 1820) - below Skyline camera with 50px clearance
+   - No cropping or resizing applied (uses raw 1280x720 image)
+
+8. **Camera Layout Reorganization**:
+   - Moved Snow Stake from (910, 1730) to (2010, 285) - new column right of Jupiter
+   - Moved Courtyard from (1600, 1730) to (2010, 697) - below Snow Stake in new column
+   - Created organized column structure: Column 1 (Jupiter/Skyline/School at X=905) and Column 2 (Snow Stake/Courtyard at X=2010)
+   - Scaled Jupiter, Skyline, School cameras to 84% (1075x605) with 30px vertical spacing
+   - Eliminated 40-pixel overlap between Skyline and Snow Stake cameras
+
+9. **Weather.gov Hourly Forecast Scaling**:
+   - Scaled from original 800x871 to 855x930 to match NWAC observations width (855px)
+   - Maintains aspect ratio: 1.0688x scale factor
+   - Positioned at (20, 1130) aligned below NWAC observations
+   - Scaled version uses `weather_gov_hourly_forecast_s.jpg`
+
 **Root Cause of Regressions:**
 - When converting from old `CropParams{X, Y, Width, Height}` to new `image.Rect(x0, y0, x1, y1)` system, some coordinates were incorrectly specified
 - Old system used starting position + dimensions; new system uses top-left and bottom-right corner coordinates
@@ -337,6 +355,67 @@ ENTRYPOINT ["/app/wd-worker"]
 - **Closure detection**: Parses WSDOT HTML to detect "Closed" status in eastbound/westbound conditions
 - **File copying**: Selected graphic is copied to `assets/pass_conditions.png` for compositing
 - **Fallback**: Uses `hw2_open.png` if parsing fails or graphic not found
+
+## Image Composite Layout
+
+### Canvas Specifications
+- **Resolution**: 3840x2160 (4K UHD)
+- **Background**: Sky blue RGB(135, 206, 235)
+- **Total Layers**: 17
+
+### Layer Map
+
+#### Background Layer
+| Image | Position | Dimensions | Description |
+|-------|----------|------------|-------------|
+| background_s.jpg | (0, 0) | 3840x2160 | GOES18 satellite image (full canvas) |
+
+#### Top Row - WSDOT Road Cameras (Y=20)
+| Image | Position | Dimensions | Description |
+|-------|----------|------------|-------------|
+| wsdot_us2_skykomish.jpg | (900, 20) | 335x249 | US2 at Skykomish |
+| wsdot_w_stevens.jpg | (1250, 20) | 335x249 | West Stevens |
+| wsdot_big_windy.jpg | (1600, 20) | 335x249 | Big Windy |
+| wsdot_stevens_pass_b.jpg | (1950, 20) | 400x225 | Stevens Pass (main) |
+| wsdot_e_stevens_summit.jpg | (2360, 20) | 335x249 | East Stevens Summit |
+
+#### Left Column 1 - NWAC Data
+| Image | Position | Dimensions | Description |
+|-------|----------|------------|-------------|
+| nwac_stevens_observations_s.jpg | (20, 20) | 855x1079 | Weather observations graph |
+| weather_gov_hourly_forecast_s.jpg | (20, 1130) | 855x930 | Hourly meteogram (scaled to match observations width) |
+
+#### Center Column 1 - Stevens Pass Cameras (X=905)
+| Image | Position | Dimensions | Description |
+|-------|----------|------------|-------------|
+| stevenspassjupiter_s.jpg | (905, 285) | 1075x605 | Jupiter camera view (84% scaled) |
+| stevenspassskyline_s.jpg | (905, 920) | 1075x605 | Skyline camera view (84% scaled) |
+| stevenspassschool_s.jpg | (905, 1555) | 1075x605 | School camera view (84% scaled) |
+
+#### Center Column 2 - Processed Cameras (X=2010)
+| Image | Position | Dimensions | Description |
+|-------|----------|------------|-------------|
+| stevenspasssnowstake_s.jpg | (2010, 285) | 680x382 | Snow stake camera |
+| stevenspasscourtyard_s.jpg | (2010, 697) | 680x382 | Courtyard camera |
+
+#### Bottom Center - Extended Forecast
+| Image | Position | Dimensions | Description |
+|-------|----------|------------|-------------|
+| weather_gov_extended_forecast_s.jpg | (2680, 1810) | 1146x300 | 7-day forecast panel |
+
+#### Right Column - Avalanche Info
+| Image | Position | Dimensions | Description |
+|-------|----------|------------|-------------|
+| nwac_stevens_avalanche_forcast.png | (3100, 60) | 718x281 | Current danger rating |
+| pass_conditions.png | (3050, 420) | 342x342 | Highway 2 pass status |
+| nwac_avalanche_forcast_s.jpg | (3420, 420) | 400x520 | Regional forecast map |
+
+### Layout Principles
+- **Column-based organization**: Related cameras grouped vertically
+- **Top row alignment**: All WSDOT road cameras at Y=20
+- **50px minimum spacing**: Between stacked images to prevent overlap
+- **Right alignment**: Critical avalanche/road status in rightmost column
+- **Z-order**: Layers applied bottom-to-top in order listed in `GetCompositeLayout()`
 
 ## Desktop Setting
 

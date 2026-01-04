@@ -24,6 +24,7 @@ var (
 	desktopImageFlag = flag.String("set-desktop", "", "Set desktop wallpaper from specified image file path")
 	desktopMethodFlag = flag.String("desktop-method", "cgo", "Wallpaper setting method (default: 'cgo')")
 	flushFlag       = flag.Bool("f", false, "Flush/clear assets directory")
+	clearCacheFlag  = flag.Bool("clear-cache", false, "Clear wallpaper Container cache (may prompt for permissions)")
 	uploadFlag      = flag.Bool("upload", false, "Upload latest rendered image to remote server via SCP (requires SSH_TARGET env var)")
 	debugFlag       = flag.Bool("debug", false, "Enable debug output")
 	scrapeTargetFlag = flag.String("scrape-target", "", "Test specific scrape target by name")
@@ -45,6 +46,7 @@ func main() {
 		fmt.Fprintf(os.Stderr, "   -set-desktop <path>   Set desktop wallpaper from specified image file\n")
 		fmt.Fprintf(os.Stderr, "   -desktop-method <m>   Wallpaper method (default: 'cgo')\n")
 		fmt.Fprintf(os.Stderr, "   -f                    Flush assets\n")
+		fmt.Fprintf(os.Stderr, "   -clear-cache          Clear wallpaper Container cache (may prompt for permissions)\n")
 		fmt.Fprintf(os.Stderr, "   -upload               Upload latest rendered image to remote server via SCP\n")
 		fmt.Fprintf(os.Stderr, "                         (requires SSH_TARGET environment variable)\n")
 		fmt.Fprintf(os.Stderr, "\nDEBUG OPTIONS:\n")
@@ -55,7 +57,7 @@ func main() {
 		fmt.Fprintf(os.Stderr, "   wd -s -scrape-target \"NWAC Stevens\" -debug\n")
 		fmt.Fprintf(os.Stderr, "   wd -s -debug\n")
 		fmt.Fprintf(os.Stderr, "   wd -set-desktop ./rendered/hud-251102-1056.jpg\n")
-		fmt.Fprintf(os.Stderr, "   wd -set-desktop ./rendered/hud-251102-1056.jpg\n")
+		fmt.Fprintf(os.Stderr, "   wd -p -clear-cache              # Set desktop with full cache cleanup\n")
 	}
 	
 	flag.Parse()
@@ -91,7 +93,7 @@ func main() {
 		} else {
 			log.Printf("Setting desktop wallpaper on all screens from: %s", absPath)
 		}
-		if err := setDesktopWallpaper(absPath, *desktopMethodFlag); err != nil {
+		if err := setDesktopWallpaper(absPath, *desktopMethodFlag, *clearCacheFlag); err != nil {
 			log.Fatalf("Failed to set desktop: %v", err)
 		}
 		log.Println("✓ Desktop wallpaper set successfully on all screens")
@@ -255,7 +257,7 @@ func main() {
 			} else {
 				log.Printf("Setting desktop wallpaper on all screens: %s", renderedPath)
 			}
-			if err := setDesktopWallpaper(renderedPath, *desktopMethodFlag); err != nil {
+			if err := setDesktopWallpaper(renderedPath, *desktopMethodFlag, *clearCacheFlag); err != nil {
 				log.Fatalf("Failed to set desktop: %v", err)
 			}
 			log.Println("✓ Desktop wallpaper set successfully on all screens")
@@ -367,12 +369,13 @@ func flushAssets(scriptDir string) error {
 }
 
 // setDesktopWallpaper sets the desktop wallpaper using CGO method
-func setDesktopWallpaper(imagePath string, method string) error {
+func setDesktopWallpaper(imagePath string, method string, clearCache bool) error {
 	verbose := *debugFlag
 	log.Printf("Desktop: ========================================")
 	log.Printf("Desktop: Setting desktop wallpaper")
 	log.Printf("Desktop: Image path: %s", imagePath)
 	log.Printf("Desktop: Method: %s", method)
+	log.Printf("Desktop: Clear Container cache: %v", clearCache)
 	log.Printf("Desktop: Verbose logging: %v", verbose)
 	log.Printf("Desktop: ========================================")
 
@@ -381,17 +384,27 @@ func setDesktopWallpaper(imagePath string, method string) error {
 		return fmt.Errorf("unsupported desktop method: %s (only 'cgo' is supported)", method)
 	}
 
+	// Clear wallpaper cache BEFORE setting new wallpaper (if requested)
+	if clearCache {
+		log.Printf("Desktop: Clearing wallpaper caches before setting new wallpaper...")
+		if err := desktop.ClearWallpaperCache(verbose, true); err != nil {
+			log.Printf("Desktop: Warning: %v", err)
+		}
+	} else {
+		// Only clear TMPDIR cache (doesn't require permissions)
+		if verbose {
+			log.Printf("Desktop: Clearing TMPDIR cache only (use -clear-cache flag for full cleanup)...")
+		}
+		if err := desktop.ClearWallpaperCache(verbose, false); err != nil {
+			log.Printf("Desktop: Warning: %v", err)
+		}
+	}
+
 	if err := desktop.SetWallpaper(imagePath, verbose); err != nil {
 		log.Printf("Desktop: ERROR - CGO SetWallpaper failed: %v", err)
 		return err
 	}
 	log.Printf("Desktop: CGO SetWallpaper completed successfully")
-
-	// Also clear wallpaper cache
-	log.Printf("Desktop: Clearing wallpaper cache...")
-	if err := desktop.ClearWallpaperCache(verbose); err != nil {
-		log.Printf("Desktop: Warning: %v", err)
-	}
 
 	log.Printf("Desktop: ========================================")
 	log.Printf("Desktop: Desktop wallpaper setting process complete")

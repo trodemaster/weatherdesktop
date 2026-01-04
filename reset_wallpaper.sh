@@ -8,26 +8,25 @@ echo "==================================="
 
 # Stop wallpaper services using launchctl
 echo "Stopping wallpaper services..."
-USER_ID=$(id -u)
 # Unload user domain services (try common service identifiers)
-launchctl bootout gui/$USER_ID/com.apple.WallpaperAgent 2>/dev/null || true
-launchctl bootout gui/$USER_ID/com.apple.wallpaper.agent 2>/dev/null || true
-launchctl bootout gui/$USER_ID/com.apple.wallpaper.extension.aerials 2>/dev/null || true
-launchctl bootout gui/$USER_ID/com.apple.wallpaper.extension.image 2>/dev/null || true
+#launchctl bootout gui/$UID/com.apple.WallpaperAgent 2>/dev/null || true
+#launchctl bootout gui/$UID/com.apple.wallpaper.agent 2>/dev/null || true
+#launchctl bootout gui/$UID/com.apple.wallpaper.extension.aerials 2>/dev/null || true
+#launchctl bootout gui/$UID/com.apple.wallpaper.extension.image 2>/dev/null || true
 # Find and unload any other wallpaper-related services in user domain
-launchctl list | grep -i wallpaper | awk '{print $3}' | while read service; do
-    launchctl bootout gui/$USER_ID/"$service" 2>/dev/null || true
-done
+#launchctl list | grep -i wallpaper | awk '{print $3}' | while read service; do
+#    launchctl bootout gui/$UID/"$service" 2>/dev/null || true
+#done
 # Also try system domain (may require sudo)
-sudo launchctl bootout system/com.apple.WallpaperAgent 2>/dev/null || true
-sudo launchctl bootout system/com.apple.wallpaper.agent 2>/dev/null || true
-sudo launchctl bootout system/com.apple.wallpaper.export 2>/dev/null || true
-sudo launchctl bootout system/com.apple.wallpaper.extension.aerials 2>/dev/null || true
-sudo launchctl bootout system/com.apple.wallpaper.extension.image 2>/dev/null || true
+# sudo launchctl bootout system/com.apple.WallpaperAgent 2>/dev/null || true
+#sudo launchctl bootout system/com.apple.wallpaper.agent 2>/dev/null || true
+#sudo launchctl bootout system/com.apple.wallpaper.export 2>/dev/null || true
+#sudo launchctl bootout system/com.apple.wallpaper.extension.aerials 2>/dev/null || true
+#sudo launchctl bootout system/com.apple.wallpaper.extension.image 2>/dev/null || true
 # Find and unload any other wallpaper-related services in system domain
-sudo launchctl list | grep -i wallpaper | awk '{print $3}' | while read service; do
-    sudo launchctl bootout system/"$service" 2>/dev/null || true
-done
+#sudo launchctl list | grep -i wallpaper | awk '{print $3}' | while read service; do
+#    sudo launchctl bootout system/"$service" 2>/dev/null || true
+#done
 # Kill any remaining processes as fallback
 killall WallpaperAgent 2>/dev/null || true
 killall Wallpaper 2>/dev/null || true

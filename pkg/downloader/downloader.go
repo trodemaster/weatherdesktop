@@ -11,6 +11,7 @@ import (
 	"log"
 	"net/http"
 	"os"
+	"strings"
 	"sync"
 	"time"
 
@@ -88,11 +89,17 @@ func (d *Downloader) DownloadAll() error {
 
 			log.Printf("Downloading %s from %s", t.Name, t.URL)
 
+			// For GOES18, save backup on successful download
 			if err := d.downloadWithRetry(t.URL, t.OutputPath, 3); err != nil {
 				log.Printf("Failed to download %s: %v, creating fallback image", t.Name, err)
 				if err := d.createFallbackImage(t.OutputPath); err != nil {
 					errorsChan <- fmt.Errorf("failed to create fallback for %s: %w", t.Name, err)
 					return
+				}
+			} else if t.Name == "GOES18 North Pacific" {
+				// Save backup after successful GOES18 download
+				if err := d.saveBackup(t.OutputPath); err != nil {
+					log.Printf("Warning: Failed to save backup for %s: %v", t.Name, err)
 				}
 			}
 		}(target)
@@ -117,21 +124,21 @@ func (d *Downloader) DownloadAll() error {
 // downloadWithRetry attempts to download a file with retry logic
 func (d *Downloader) downloadWithRetry(url, destPath string, maxRetries int) error {
 	var lastErr error
-	
+
 	for attempt := 0; attempt < maxRetries; attempt++ {
 		if attempt > 0 {
 			// Wait before retry
 			time.Sleep(time.Second * time.Duration(attempt))
 			log.Printf("Retry attempt %d for %s", attempt+1, url)
 		}
-		
+
 		err := d.download(url, destPath)
 		if err == nil {
 			return nil
 		}
 		lastErr = err
 	}
-	
+
 	return fmt.Errorf("failed after %d attempts: %w", maxRetries, lastErr)
 }
 
@@ -168,23 +175,70 @@ func (d *Downloader) download(url, destPath string) error {
 	return nil
 }
 
-// createFallbackImage creates a 1x1 transparent PNG as fallback
+// createFallbackImage creates a fallback image, preferring to restore GOES18 from backup
 func (d *Downloader) createFallbackImage(destPath string) error {
-	// Create a 1x1 transparent image
+	// For GOES18, try to restore from backup first
+	if isGOES18(destPath) {
+		backupPath := destPath + ".backup"
+		if _, err := os.Stat(backupPath); err == nil {
+			// Backup exists, copy it to destination
+			if err := d.copyFile(backupPath, destPath); err != nil {
+				log.Printf("Warning: Failed to restore GOES18 backup from %s: %v", backupPath, err)
+			} else {
+				log.Printf("Restored GOES18 from backup: %s -> %s", backupPath, destPath)
+				return nil
+			}
+		}
+	}
+
+	// No backup available or not GOES18, create 1x1 transparent fallback as last resort
 	img := image.NewRGBA(image.Rect(0, 0, 1, 1))
 	img.Set(0, 0, color.RGBA{0, 0, 0, 0}) // Transparent
-	
+
 	out, err := os.Create(destPath)
 	if err != nil {
 		return fmt.Errorf("failed to create fallback file: %w", err)
 	}
 	defer out.Close()
-	
+
 	if err := png.Encode(out, img); err != nil {
 		return fmt.Errorf("failed to encode fallback image: %w", err)
 	}
-	
+
 	log.Printf("Created 1x1 transparent fallback image at %s", destPath)
+	return nil
+}
+
+// isGOES18 checks if a file path is the GOES18 North Pacific image
+func isGOES18(filePath string) bool {
+	return strings.Contains(filePath, "GOES18_north_pacific")
+}
+
+// saveBackup saves a backup copy of a successfully downloaded file
+func (d *Downloader) saveBackup(sourcePath string) error {
+	backupPath := sourcePath + ".backup"
+	return d.copyFile(sourcePath, backupPath)
+}
+
+// copyFile copies a file from source to destination
+func (d *Downloader) copyFile(src, dst string) error {
+	srcFile, err := os.Open(src)
+	if err != nil {
+		return fmt.Errorf("failed to open source file: %w", err)
+	}
+	defer srcFile.Close()
+
+	dstFile, err := os.Create(dst)
+	if err != nil {
+		return fmt.Errorf("failed to create destination file: %w", err)
+	}
+	defer dstFile.Close()
+
+	_, err = io.Copy(dstFile, srcFile)
+	if err != nil {
+		return fmt.Errorf("failed to copy file: %w", err)
+	}
+
 	return nil
 }
 

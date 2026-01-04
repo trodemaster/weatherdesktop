@@ -1,0 +1,43 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<!DOCTYPE plist PUBLIC "-//Apple//DTD PLIST 1.0//EN" "http://www.apple.com/DTDs/PropertyList-1.0.dtd">
+<plist version="1.0">
+<dict>
+    <key>Label</key>
+    <string>tv.jibb.weatherdesktop.cacheflush</string>
+
+    <key>ProgramArguments</key>
+    <array>
+        <string>/Users/blake/Developer/weatherdesktop/flush_wallpaper_cache.sh</string>
+    </array>
+
+    <key>StartCalendarInterval</key>
+    <dict>
+        <key>Hour</key>
+        <integer>1</integer>
+        <key>Minute</key>
+        <integer>0</integer>
+    </dict>
+
+    <key>StandardOutPath</key>
+    <string>/Library/Logs/weatherdesktop_cacheflush.log</string>
+
+    <key>StandardErrorPath</key>
+    <string>/Library/Logs/weatherdesktop_cacheflush.log</string>
+
+    <key>RunAtLoad</key>
+    <false/>
+</dict>
+</plist>
+<!--
+# Install as system agent (requires sudo)
+sudo cp /Users/blake/Developer/weatherdesktop/tv.jibb.weatherdesktop.cacheflush.plist /Library/LaunchAgents/
+
+# Load in system context
+sudo launchctl bootstrap system /Library/LaunchAgents/tv.jibb.weatherdesktop.cacheflush.plist
+
+# Check status
+sudo launchctl print system/tv.jibb.weatherdesktop.cacheflush
+
+# Unload
+sudo launchctl bootout system/tv.jibb.weatherdesktop.cacheflush
+-->

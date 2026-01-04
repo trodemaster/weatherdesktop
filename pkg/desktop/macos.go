@@ -181,55 +181,127 @@ func SetWallpaper(imagePath string, verbose bool) error {
 	return nil
 }
 
-// ClearWallpaperCache clears macOS wallpaper cache
-// Replicates: find "${TMPDIR}../C/com.apple.wallpaper.caches/extension-com.apple.wallpaper.extension.image" -name "*.png" -type f -delete
+// ClearWallpaperCache clears macOS wallpaper caches from multiple locations
 // verbose enables detailed logging
-func ClearWallpaperCache(verbose bool) error {
+// clearContainer controls whether to clear Container cache (requires permissions)
+func ClearWallpaperCache(verbose bool, clearContainer bool) error {
 	if verbose {
-		log.Printf("Desktop: Clearing wallpaper cache...")
+		log.Printf("Desktop: Clearing wallpaper caches...")
 	}
 
+	// Always clear TMPDIR-based cache (doesn't require special permissions)
+	if err := clearTMPDIRCache(verbose); err != nil {
+		if verbose {
+			log.Printf("Desktop: WARNING - Failed to clear TMPDIR cache: %v", err)
+		}
+		// Continue even if this fails
+	}
+
+	// Only clear Container-based cache if explicitly requested (may trigger security prompt)
+	if clearContainer {
+		if err := clearContainerCache(verbose); err != nil {
+			if verbose {
+				log.Printf("Desktop: WARNING - Failed to clear Container cache: %v", err)
+			}
+			// Continue even if this fails
+		}
+	} else {
+		if verbose {
+			log.Printf("Desktop: Skipping Container cache cleanup (use -clear-cache flag to enable)")
+		}
+	}
+
+	if verbose {
+		log.Printf("Desktop: Cache clearing complete")
+	}
+
+	return nil
+}
+
+// clearTMPDIRCache clears TMPDIR-based wallpaper cache
+// Path: ${TMPDIR}../C/com.apple.wallpaper.caches/extension-com.apple.wallpaper.extension.image
+func clearTMPDIRCache(verbose bool) error {
 	tmpDir := os.Getenv("TMPDIR")
 	if tmpDir == "" {
 		tmpDir = "/tmp"
-	}
-
-	if verbose {
-		log.Printf("Desktop: TMPDIR: %s", tmpDir)
 	}
 
 	// Construct cache path
 	cachePath := filepath.Join(tmpDir, "../C/com.apple.wallpaper.caches/extension-com.apple.wallpaper.extension.image")
 
 	if verbose {
-		log.Printf("Desktop: Cache path: %s", cachePath)
+		log.Printf("Desktop: TMPDIR cache path: %s", cachePath)
 	}
 
 	// Check if cache directory exists
 	if _, err := os.Stat(cachePath); os.IsNotExist(err) {
-		// Cache doesn't exist, nothing to clear
 		if verbose {
-			log.Printf("Desktop: Cache directory does not exist, nothing to clear")
+			log.Printf("Desktop: TMPDIR cache directory does not exist, skipping")
 		}
 		return nil
 	}
 
 	if verbose {
-		log.Printf("Desktop: Cache directory exists, clearing PNG files...")
+		log.Printf("Desktop: TMPDIR cache directory exists, clearing files...")
 	}
 
-	// Use find command to delete PNG files
-	cmd := exec.Command("find", cachePath, "-name", "*.png", "-type", "f", "-delete")
+	// Remove all files in the cache directory (not just PNGs)
+	cmd := exec.Command("find", cachePath, "-type", "f", "-delete")
 	if err := cmd.Run(); err != nil {
-		// Don't fail if cache clearing fails, just log it
 		if verbose {
-			log.Printf("Desktop: WARNING - Failed to clear wallpaper cache: %v", err)
+			log.Printf("Desktop: WARNING - Failed to clear TMPDIR cache: %v", err)
 		}
-		return fmt.Errorf("warning: failed to clear wallpaper cache: %w", err)
+		return fmt.Errorf("failed to clear TMPDIR cache: %w", err)
 	}
 
 	if verbose {
-		log.Printf("Desktop: Cache cleared successfully")
+		log.Printf("Desktop: TMPDIR cache cleared successfully")
+	}
+
+	return nil
+}
+
+// clearContainerCache clears Container-based wallpaper cache
+// Path: ~/Library/Containers/com.apple.wallpaper.agent/Data/Library/Caches/com.apple.wallpaper.caches/extension-com.apple.wallpaper.extension.image/
+func clearContainerCache(verbose bool) error {
+	homeDir, err := os.UserHomeDir()
+	if err != nil {
+		if verbose {
+			log.Printf("Desktop: WARNING - Failed to get home directory: %v", err)
+		}
+		return fmt.Errorf("failed to get home directory: %w", err)
+	}
+
+	// Construct Container cache path
+	cachePath := filepath.Join(homeDir, "Library/Containers/com.apple.wallpaper.agent/Data/Library/Caches/com.apple.wallpaper.caches/extension-com.apple.wallpaper.extension.image")
+
+	if verbose {
+		log.Printf("Desktop: Container cache path: %s", cachePath)
+	}
+
+	// Check if cache directory exists
+	if _, err := os.Stat(cachePath); os.IsNotExist(err) {
+		if verbose {
+			log.Printf("Desktop: Container cache directory does not exist, skipping")
+		}
+		return nil
+	}
+
+	if verbose {
+		log.Printf("Desktop: Container cache directory exists, clearing files...")
+	}
+
+	// Remove all files in the cache directory
+	cmd := exec.Command("find", cachePath, "-type", "f", "-delete")
+	if err := cmd.Run(); err != nil {
+		if verbose {
+			log.Printf("Desktop: WARNING - Failed to clear Container cache: %v", err)
+		}
+		return fmt.Errorf("failed to clear Container cache: %w", err)
+	}
+
+	if verbose {
+		log.Printf("Desktop: Container cache cleared successfully")
 	}
 
 	return nil

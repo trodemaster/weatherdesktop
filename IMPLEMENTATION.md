@@ -4,6 +4,34 @@ Technical documentation for developers and contributors.
 
 ## Recent Changes (December 2025)
 
+### Cache Cleanup Implementation (January 2026)
+
+**Changes Made:**
+1. **Enhanced Cache Cleanup**: Updated `ClearWallpaperCache()` to clear both cache locations:
+   - TMPDIR-based cache: `${TMPDIR}../C/com.apple.wallpaper.caches/extension-com.apple.wallpaper.extension.image/` (always cleared)
+   - Container-based cache: `~/Library/Containers/com.apple.wallpaper.agent/Data/Library/Caches/com.apple.wallpaper.caches/extension-com.apple.wallpaper.extension.image/` (optional, requires `-clear-cache` flag)
+2. **Optional Container Cache Cleanup**: Added `-clear-cache` flag to enable Container cache cleanup
+   - Default behavior: Only clears TMPDIR cache (no security prompts)
+   - With `-clear-cache`: Clears both caches (may trigger macOS security prompt on first use)
+3. **Timing Change**: Cache clearing now happens **before** setting wallpaper (was previously after)
+4. **Complete File Removal**: Now removes all files in cache directories (not just PNGs)
+5. **Split Functions**: Separated into `clearTMPDIRCache()` and `clearContainerCache()` for maintainability
+6. **Graceful Degradation**: If one cache location fails to clear, the other is still attempted
+
+**Root Cause**: macOS wallpaper system creates cached copies in Container-based storage that accumulate over time, causing disk space issues. Container cache access requires special permissions, so it's now opt-in.
+
+**Usage:**
+```bash
+# Normal run (TMPDIR cache only, no prompts)
+./wd
+
+# Full cache cleanup (includes Container cache, may prompt first time)
+./wd -clear-cache
+
+# Desktop setting with full cleanup
+./wd -p -clear-cache
+```
+
 ### Image Cropping and Positioning Updates (December 15, 2025)
 
 **Changes Made:**
@@ -425,7 +453,10 @@ ENTRYPOINT ["/app/wd-worker"]
 - Direct NSWorkspace API calls (`[[NSWorkspace sharedWorkspace] setDesktopImageURL:forScreen:options:error:]`)
 - Sets wallpaper on all screens automatically
 - Merges existing screen options to preserve per-screen settings (fill color, etc.)
-- Clears wallpaper cache for immediate update
+- Clears wallpaper caches **before** setting new wallpaper (prevents cache buildup)
+- TMPDIR cache: Always cleared (no permissions needed)
+- Container cache: Only cleared with `-clear-cache` flag (may prompt for permissions)
+- 0.5 second delay after setting to allow system to process
 - 0.5 second delay after setting to allow system to process
 
 **Host-only:**

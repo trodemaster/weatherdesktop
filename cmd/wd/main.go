@@ -251,7 +251,7 @@ func main() {
 			if err != nil {
 				log.Fatalf("Failed to find rendered file: %v", err)
 			}
-			
+
 			if *debugFlag {
 				log.Printf("Setting desktop wallpaper on all screens (debug mode): %s", renderedPath)
 			} else {

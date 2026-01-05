@@ -306,3 +306,45 @@ func clearContainerCache(verbose bool) error {
 
 	return nil
 }
+
+// clearContainerPreferences clears the WallpaperImageExtension container preferences
+// that accumulate massive cache data (12K+ items) causing NSUserDefaults 4MB limit violations
+func clearContainerPreferences(verbose bool) error {
+	homeDir, err := os.UserHomeDir()
+	if err != nil {
+		return fmt.Errorf("failed to get home directory: %w", err)
+	}
+
+	// Path to the problematic container preferences file
+	containerPrefsPath := filepath.Join(homeDir, "Library/Containers/com.apple.wallpaper.extension.image/Data/Library/Preferences/com.apple.wallpaper.extension.image.plist")
+
+	if verbose {
+		log.Printf("Desktop: Container preferences path: %s", containerPrefsPath)
+	}
+
+	// Check if file exists
+	if _, err := os.Stat(containerPrefsPath); os.IsNotExist(err) {
+		if verbose {
+			log.Printf("Desktop: Container preferences file does not exist, skipping")
+		}
+		return nil
+	}
+
+	if verbose {
+		log.Printf("Desktop: Container preferences file exists, removing...")
+	}
+
+	// Remove the massive preferences file
+	if err := os.Remove(containerPrefsPath); err != nil {
+		if verbose {
+			log.Printf("Desktop: WARNING - Failed to remove container preferences: %v", err)
+		}
+		return fmt.Errorf("failed to remove container preferences: %w", err)
+	}
+
+	if verbose {
+		log.Printf("Desktop: Container preferences cleared successfully")
+	}
+
+	return nil
+}

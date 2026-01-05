@@ -93,13 +93,136 @@ echo "Step 4: Clearing Container wallpaper cache..."
 CONTAINER_CACHE="$HOME/Library/Containers/com.apple.wallpaper.agent/Data/Library/Caches/com.apple.wallpaper.caches/extension-com.apple.wallpaper.extension.image"
 safe_remove_dir "$CONTAINER_CACHE" "Container wallpaper cache"
 
+# Clear wallpaper agent's entire Data directory to reset all internal state
+# This forces WallpaperAgent to rebuild its catalog from scratch
+AGENT_DATA_DIR="$HOME/Library/Containers/com.apple.wallpaper.agent/Data"
+if [ -d "$AGENT_DATA_DIR" ]; then
+    echo "Clearing wallpaper agent internal state (Data directory)..."
+    # Remove all contents but keep the directory structure
+    find "$AGENT_DATA_DIR" -mindepth 1 -delete 2>/dev/null || true
+    echo "✓ Cleared wallpaper agent internal state"
+fi
+
 # Clear wallpaper caches in ~/Library/Caches
 echo "Step 5: Clearing wallpaper caches in ~/Library/Caches..."
 safe_remove_dir "$HOME/Library/Caches/com.apple.wallpaper" "wallpaper cache directory"
 
+# 6. Clear wallpaper preferences that might cause Index.plist recreation
+echo "Step 6: Clearing wallpaper preferences..."
+WALLPAPER_PREFS=(
+    "$HOME/Library/Preferences/com.apple.wallpaper.plist"
+    "$HOME/Library/Preferences/com.apple.wallpaper.aerial.plist"
+    "$HOME/Library/Preferences/com.apple.Home.wallpaper.plist"
+)
+
+for pref_file in "${WALLPAPER_PREFS[@]}"; do
+    if [ -f "$pref_file" ]; then
+        echo "Removing wallpaper preference: $(basename "$pref_file")"
+        rm -f "$pref_file" 2>/dev/null || true
+    fi
+done
+
+# 7. Clear com.apple.spaces.plist to remove historical "Collapsed Space" entries
+# These accumulate over time and cause WallpaperAgent to create massive Index.plist
+echo "Step 7: Clearing Mission Control historical spaces..."
+SPACES_PLIST="$HOME/Library/Preferences/com.apple.spaces.plist"
+if [ -f "$SPACES_PLIST" ]; then
+    echo "Removing spaces preferences (will regenerate with active spaces only): $SPACES_PLIST"
+    rm -f "$SPACES_PLIST" 2>/dev/null || true
+    if [ -f "$SPACES_PLIST" ]; then
+        echo "Warning: Failed to remove $SPACES_PLIST"
+    else
+        echo "✓ Removed historical spaces data"
+    fi
+fi
+
+# 8. Clear Metal shader caches that WallpaperImageExtension uses
+echo "Step 8: Clearing Metal shader caches..."
+# Find and clear wallpaper extension Metal caches
+find "$HOME/Library/Caches" -path "*wallpaper*metal*" -type d -exec rm -rf {} + 2>/dev/null || true
+find "$TMPDIR" -path "*wallpaper*metal*" -type d -exec rm -rf {} + 2>/dev/null || true
+# Clear the specific Metal cache directory from process inspector
+METAL_CACHE_DIR="$TMPDIR../C/com.apple.wallpaper.extension.image/com.apple.wallpaper.extension.image/com.apple.metal"
+if [ -d "$METAL_CACHE_DIR" ]; then
+    rm -rf "$METAL_CACHE_DIR" 2>/dev/null || true
+    echo "✓ Cleared Metal shader caches"
+fi
+
+# 9. Clear LaunchServices caches that may be corrupted
+echo "Step 9: Clearing LaunchServices caches..."
+LAUNCH_SERVICES_CACHE="$TMPDIR../0/com.apple.LaunchServices.dv"
+if [ -d "$LAUNCH_SERVICES_CACHE" ]; then
+    find "$LAUNCH_SERVICES_CACHE" -name "*.csstore" -delete 2>/dev/null || true
+    echo "✓ Cleared LaunchServices caches"
+fi
+
+# 10. CRITICAL: Clear WallpaperImageExtension container cache
+# FOUND IT: Container stores 12,660+ image data references (15MB) before syncing to NSUserDefaults
+echo "Step 10: Clearing WallpaperImageExtension container cache..."
+WALLPAPER_EXT_CONTAINER="$HOME/Library/Containers/com.apple.wallpaper.extension.image"
+CONTAINER_PREFS="$WALLPAPER_EXT_CONTAINER/Data/Library/Preferences/com.apple.wallpaper.extension.image.plist"
+
+# Always delete the problematic container preferences file
+if [ -f "$CONTAINER_PREFS" ]; then
+    FILE_SIZE=$(stat -f%z "$CONTAINER_PREFS" 2>/dev/null || echo "0")
+    echo "WallpaperImageExtension container preferences: ${FILE_SIZE} bytes - deleting"
+    rm -f "$CONTAINER_PREFS" 2>/dev/null || true
+    echo "✓ Cleared WallpaperImageExtension container cache (prevents 12K+ image references)"
+fi
+
+# Also clear any main preferences file if it exists
+MAIN_PREFS="$HOME/Library/Preferences/com.apple.wallpaper.extension.image.plist"
+if [ -f "$MAIN_PREFS" ]; then
+    echo "Clearing any existing main preferences file..."
+    rm -f "$MAIN_PREFS" 2>/dev/null || true
+fi
+
+# Note: Rendered images are preserved - weather desktop requires all historical images
+# The issue is that WallpaperImageExtension caches ALL of them (15K+), causing 4MB limit violation
+
+# 8. Ensure wallpaper directory exists but stays empty
+echo "Step 8: Ensuring clean wallpaper directory structure..."
+mkdir -p "$HOME/Library/Application Support/com.apple.wallpaper/Store" 2>/dev/null || true
+
 echo "================================="
 echo "Wallpaper cache flush complete!"
 echo "System should now be responsive."
+echo ""
+echo "=== POST-FLUSH FILE SIZE REPORT ==="
+
+# Report sizes of key plist files
+echo "Wallpaper-related plist file sizes:"
+
+# WallpaperImageExtension container plist (the massive cache)
+EXT_PLIST="$HOME/Library/Containers/com.apple.wallpaper.extension.image/Data/Library/Preferences/com.apple.wallpaper.extension.image.plist"
+if [ -f "$EXT_PLIST" ]; then
+    SIZE=$(stat -f%z "$EXT_PLIST" 2>/dev/null || echo "0")
+    SIZE_MB=$((SIZE / 1048576))
+    SIZE_KB=$(((SIZE % 1048576) / 1024))
+    echo "  WallpaperImageExtension container plist: ${SIZE_MB}MB ${SIZE_KB}KB (${SIZE} bytes)"
+else
+    echo "  WallpaperImageExtension container plist: NOT FOUND"
+fi
+
+# System wallpaper Index.plist
+INDEX_PLIST="$HOME/Library/Application Support/com.apple.wallpaper/Store/Index.plist"
+if [ -f "$INDEX_PLIST" ]; then
+    SIZE=$(stat -f%z "$INDEX_PLIST" 2>/dev/null || echo "0")
+    echo "  System wallpaper Index.plist: ${SIZE} bytes"
+else
+    echo "  System wallpaper Index.plist: NOT FOUND"
+fi
+
+# Aerial wallpaper preferences
+AERIAL_PLIST="$HOME/Library/Preferences/com.apple.wallpaper.aerial.plist"
+if [ -f "$AERIAL_PLIST" ]; then
+    SIZE=$(stat -f%z "$AERIAL_PLIST" 2>/dev/null || echo "0")
+    echo "  Aerial wallpaper preferences: ${SIZE} bytes"
+else
+    echo "  Aerial wallpaper preferences: NOT FOUND"
+fi
+
+echo "================================="
 
 # Optional: Send notification if terminal-notifier is available
 if command -v terminal-notifier >/dev/null 2>&1; then

@@ -9,3 +9,4 @@ wd-worker
 *.psd
 .env
 .envrc
+assets/*

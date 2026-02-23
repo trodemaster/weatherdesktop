@@ -102,7 +102,7 @@ func (m *Manager) GetDownloadTargets() []DownloadTarget {
 		},
 		{
 			Name:       "Stevens Pass Courtyard",
-			URL:        "https://streamer8.brownrice.com/cam-images/stevenspasscourtyard.jpg",
+			URL:        "https://player.brownrice.com/snapshot/stevenspasscourtyard",
 			OutputPath: filepath.Join(m.AssetsDir, "stevenspasscourtyard.jpg"),
 		},
 		{

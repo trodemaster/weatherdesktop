@@ -20,7 +20,11 @@ all: build
 
 # Rebuild everything (Docker + host binary)
 .PHONY: rebuild
-rebuild: docker-build build docker-restart
+rebuild:
+	@echo "Cleaning cached assets..."
+	@rm -f assets/*.png assets/*.jpg assets/*.html
+	@echo "✓ Cached assets cleaned"
+	@$(MAKE) docker-build build docker-restart
 	@echo "✓ Complete rebuild finished"
 	@echo "  - Docker image: weatherdesktop-wd-worker"
 	@echo "  - Host binary: $(BUILD_DIR)/$(BINARY_NAME)"

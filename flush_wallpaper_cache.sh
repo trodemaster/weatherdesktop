@@ -156,29 +156,37 @@ if [ -d "$LAUNCH_SERVICES_CACHE" ]; then
     echo "✓ Cleared LaunchServices caches"
 fi
 
-# 10. CRITICAL: Clear WallpaperImageExtension container cache
-# FOUND IT: Container stores 12,660+ image data references (15MB) before syncing to NSUserDefaults
-echo "Step 10: Clearing WallpaperImageExtension container cache..."
-WALLPAPER_EXT_CONTAINER="$HOME/Library/Containers/com.apple.wallpaper.extension.image"
-CONTAINER_PREFS="$WALLPAPER_EXT_CONTAINER/Data/Library/Preferences/com.apple.wallpaper.extension.image.plist"
+# 10. CRITICAL: Clear WallpaperImageExtension container cache via cfprefsd
+#
+# Root cause: WallpaperImageExtension stores a bookmark for every wallpaper ever
+# set in ChoiceRequests.ImageFiles (accumulated 15K+ entries / 15MB over months).
+# Deleting the plist file alone (rm -f) does NOT work because cfprefsd holds the
+# data in its in-memory cache and restores the file immediately.
+#
+# Fix: use `defaults write` to overwrite the keys with empty arrays. This updates
+# cfprefsd's cache directly so WallpaperImageExtension sees the clean state when
+# it restarts. WallpaperAgent then only registers the current wallpaper
+# (~/Pictures/Desktop/weather-desktop.jpg), keeping the plist tiny.
+echo "Step 10: Clearing WallpaperImageExtension container cache via cfprefsd..."
+EXT_DOMAIN="$HOME/Library/Containers/com.apple.wallpaper.extension.image/Data/Library/Preferences/com.apple.wallpaper.extension.image"
+EXT_PLIST_FILE="${EXT_DOMAIN}.plist"
 
-# Always delete the problematic container preferences file
-if [ -f "$CONTAINER_PREFS" ]; then
-    FILE_SIZE=$(stat -f%z "$CONTAINER_PREFS" 2>/dev/null || echo "0")
-    echo "WallpaperImageExtension container preferences: ${FILE_SIZE} bytes - deleting"
-    rm -f "$CONTAINER_PREFS" 2>/dev/null || true
-    echo "✓ Cleared WallpaperImageExtension container cache (prevents 12K+ image references)"
+if [ -f "$EXT_PLIST_FILE" ]; then
+    FILE_SIZE=$(stat -f%z "$EXT_PLIST_FILE" 2>/dev/null || echo "0")
+    echo "WallpaperImageExtension container preferences: ${FILE_SIZE} bytes"
 fi
 
-# Also clear any main preferences file if it exists
+# Write empty arrays through cfprefsd (not rm -f, which bypasses the cache)
+defaults write "$EXT_DOMAIN" "ChoiceRequests.ImageFiles"             -array 2>/dev/null || true
+defaults write "$EXT_DOMAIN" "ChoiceRequests.Assets"                 -array 2>/dev/null || true
+defaults write "$EXT_DOMAIN" "ChoiceRequests.CollectionIdentifiers"  -array 2>/dev/null || true
+echo "✓ Cleared WallpaperImageExtension ChoiceRequests via cfprefsd"
+
+# Also clear the main (non-container) preferences file if it exists
 MAIN_PREFS="$HOME/Library/Preferences/com.apple.wallpaper.extension.image.plist"
 if [ -f "$MAIN_PREFS" ]; then
-    echo "Clearing any existing main preferences file..."
     rm -f "$MAIN_PREFS" 2>/dev/null || true
 fi
-
-# Note: Rendered images are preserved - weather desktop requires all historical images
-# The issue is that WallpaperImageExtension caches ALL of them (15K+), causing 4MB limit violation
 
 # 8. Ensure wallpaper directory exists but stays empty
 echo "Step 8: Ensuring clean wallpaper directory structure..."
@@ -193,13 +201,16 @@ echo "=== POST-FLUSH FILE SIZE REPORT ==="
 # Report sizes of key plist files
 echo "Wallpaper-related plist file sizes:"
 
-# WallpaperImageExtension container plist (the massive cache)
+# WallpaperImageExtension container plist (should be tiny after cleanup)
 EXT_PLIST="$HOME/Library/Containers/com.apple.wallpaper.extension.image/Data/Library/Preferences/com.apple.wallpaper.extension.image.plist"
 if [ -f "$EXT_PLIST" ]; then
     SIZE=$(stat -f%z "$EXT_PLIST" 2>/dev/null || echo "0")
-    SIZE_MB=$((SIZE / 1048576))
-    SIZE_KB=$(((SIZE % 1048576) / 1024))
-    echo "  WallpaperImageExtension container plist: ${SIZE_MB}MB ${SIZE_KB}KB (${SIZE} bytes)"
+    if [ "$SIZE" -gt 1048576 ]; then
+        SIZE_MB=$((SIZE / 1048576))
+        echo "  WallpaperImageExtension container plist: ${SIZE_MB}MB (${SIZE} bytes) ⚠️  still large"
+    else
+        echo "  WallpaperImageExtension container plist: ${SIZE} bytes ✓"
+    fi
 else
     echo "  WallpaperImageExtension container plist: NOT FOUND"
 fi

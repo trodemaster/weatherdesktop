@@ -4,6 +4,99 @@ Technical documentation for developers and contributors.
 
 ## Recent Changes (December 2025)
 
+### WallpaperAgent Hang — Full Root Cause & Fix (February 2026)
+
+> **Status: Stable workaround in place. Under observation for several days before considering further changes.**
+
+#### Problem Summary
+
+`WallpaperAgent` was consuming 100% CPU and hanging for 20–30+ seconds after every `./wd` run, blocking the desktop from updating.
+
+#### True Root Cause
+
+The hang is caused by `WallpaperImageExtension` accumulating a bookmark entry in `ChoiceRequests.ImageFiles` (inside its container preferences plist) for **every unique file path ever set as a wallpaper**. With `./wd` running every 5 minutes and producing a new `hud-YYMMDD-HHMM.jpg` each time, this list grew to **15,000+ entries (~15MB)**. `WallpaperAgent` then attempted to sync this structure to `NSUserDefaults`, which has a hard 4MB platform limit, causing `PropertyListEncoder` to hang in an infinite retry loop.
+
+**Contributing factors:**
+
+1. **Unique timestamped filenames** — each `hud-YYMMDD-HHMM.jpg` was a new path, so the extension kept adding new bookmarks without ever deduplicating.
+2. **`code/` symlink alias** — the launchd job ran `wd` with `WorkingDirectory: /Users/blake/code/weatherdesktop` (a symlink to `Developer/`). Because `os.Args[0]` was the symlink path, all wallpaper paths recorded by WallpaperAgent used `code/...` instead of `Developer/...`, making paths appear as new entries even after the project was moved.
+3. **`cfprefsd` cache not cleared** — previous cleanup attempts used `rm -f` on the plist file, which bypasses `cfprefsd`'s in-memory cache. The daemon restored the 15MB file instantly from cache every time, making all cleanup attempts completely ineffective — including across reboots, since cfprefsd's cache is populated from the file before the file is deleted.
+4. **`setDesktopImageURL:` only updating the active space** — other Mission Control spaces retained old `rendered/` path wallpapers, so WallpaperAgent continued registering those historical paths with the extension even after the active space was updated.
+
+#### Fixes Applied
+
+**1. Fixed wallpaper source — `~/Pictures/Desktop/weather-desktop.jpg`**
+
+- `cmd/wd/main.go`: Added `syncDesktopPicturesDir()` — copies the current rendered image to `~/Pictures/Desktop/weather-desktop.jpg` (fixed filename, file content changes each run).
+- `setDesktopWallpaper()` now sets the wallpaper from this fixed path instead of a timestamped `rendered/` path.
+- Because the path never changes, `WallpaperImageExtension` deduplicates the bookmark and never adds a new entry — the extension plist stops growing entirely.
+- Stale `.jpg` files in `~/Pictures/Desktop/` are cleaned up on each run.
+- `rendered/` files are never deleted (they are needed for video production).
+
+**2. Apply wallpaper to all Mission Control spaces — `NSWorkspaceDesktopImageAllSpacesKey`**
+
+- `pkg/desktop/macos.go`: Added `extern NSString * const NSWorkspaceDesktopImageAllSpacesKey;` — this symbol exists in AppKit at runtime but is not declared in the public `NSWorkspace.h` header (confirmed via `AppKit.tbd` in the macOS SDK).
+- Set `NSWorkspaceDesktopImageAllSpacesKey: @(YES)` in the options dictionary passed to `setDesktopImageURL:forScreen:options:error:`.
+- This updates **all Mission Control spaces** on each screen simultaneously, eliminating stale `rendered/` path references that persisted in the window server's per-space wallpaper state.
+- Removed the "merge existing screen options" block which could have overwritten this key.
+
+**3. Fixed launchd job path — `Developer/` instead of `code/`**
+
+- `Developer/machine-cfg/umac/tv.jibb.wd.plist`: Changed `ProgramArguments` and `WorkingDirectory` from `/Users/blake/code/weatherdesktop` to `/Users/blake/Developer/weatherdesktop`.
+- `code → Developer/` is a symlink, so the binary was identical, but `os.Args[0]` returned the symlink path. This caused `scriptDir` to resolve as `code/...`, so WallpaperAgent recorded all wallpaper paths using the `code/` alias — building up a separate history from the `Developer/` paths.
+- Launchd job reloaded with `launchctl bootout` + `launchctl bootstrap`.
+
+**4. Fixed cache cleanup to use `defaults write` — `flush_wallpaper_cache.sh`**
+
+- Previous cleanup used `rm -f` on the extension plist. **This never worked.** `cfprefsd` holds preferences in an in-memory cache and restores the file immediately on next access, regardless of deletion.
+- New cleanup uses `defaults write <domain> "ChoiceRequests.ImageFiles" -array` (and similarly for `ChoiceRequests.Assets` and `ChoiceRequests.CollectionIdentifiers`). Writing through `defaults` updates cfprefsd's cache directly, so the old data is truly gone.
+- Result: plist drops from ~15MB to ~357 bytes immediately after the flush and stays small. After WallpaperAgent restarts, it registers only `weather-desktop.jpg` — one entry (~1.5KB total).
+
+#### SDK Investigation Notes
+
+Searched the macOS SDK (`MacOSX.sdk`) for wallpaper internals:
+
+- **`NSWorkspaceDesktopImageAllSpacesKey`** — exported in `AppKit.tbd` but absent from `NSWorkspace.h`. Usable via `extern NSString * const NSWorkspaceDesktopImageAllSpacesKey;`.
+- **`Wallpaper.framework` (private)** — Swift XPC framework. Relevant symbols: `AgentXPCMessage.addChoiceRequest`, `removeChoiceRequest`, `snapshotAllSpaces()`, `DisplaySpacesInfo`, `LegacyDesktopPictureConfiguration`.
+- **`DesktopPictureSetDisplayForSpace` / `DesktopPictureCopyDisplayForSpace`** — private C APIs in `HIServices.framework` for per-space wallpaper operations (not used, but available if finer-grained space control is needed in future).
+- **`ChoiceRequests.ImageFiles`** — the specific NSUserDefaults key that accumulates wallpaper history. Clearing via `defaults write ... -array` is the effective reset method.
+
+#### Test Results (February 22, 2026)
+
+| Metric | Before | After |
+|---|---|---|
+| Extension plist size | ~15.2MB, ~15K entries | ~1.5KB, 1 entry |
+| Plist after daily flush | Rebuilt to 15MB instantly | Stays at ~357 bytes |
+| WallpaperAgent CPU | 100% hang, 20–30s | Normal |
+| Desktop update | Blocked until process killed | Updates cleanly each run |
+
+#### TODO
+
+- **Consider reverting `~/Pictures/Desktop/` indirection.** Now that `cfprefsd`-aware cleanup works and `NSWorkspaceDesktopImageAllSpacesKey` eliminates stale space references, it may be possible to set the wallpaper directly from `rendered/` again — using a **fixed symlink** (e.g., `rendered/current.jpg → hud-YYMMDD-HHMM.jpg`) so the registered path never changes. This would simplify `syncDesktopPicturesDir()` away entirely. Evaluate after a few days of stability testing with the current approach.
+
+#### Files Modified
+
+| File | Change |
+|---|---|
+| `cmd/wd/main.go` | `syncDesktopPicturesDir()` with fixed `weather-desktop.jpg` filename; `setDesktopWallpaper()` updated |
+| `pkg/desktop/macos.go` | `NSWorkspaceDesktopImageAllSpacesKey: @(YES)` added; merge-existing-options removed |
+| `flush_wallpaper_cache.sh` | Step 10 replaced `rm -f` with `defaults write` empty arrays via cfprefsd |
+| `machine-cfg/umac/tv.jibb.wd.plist` | `ProgramArguments` and `WorkingDirectory` updated from `code/` → `Developer/` |
+
+---
+
+### Desktop Pictures Directory Isolation (February 2026)
+
+> **Superseded by the fuller investigation above.** This section captures the initial approach; see "WallpaperAgent Hang — Full Root Cause & Fix" for the complete picture and current state.
+
+**Initial approach:**
+- Copies the current rendered image to `~/Pictures/Desktop/weather-desktop.jpg` (fixed filename — later revised from the original timestamped approach).
+- `setDesktopWallpaper()` sets the wallpaper from this copy instead of directly from `rendered/`.
+- Stale `.jpg` files in `~/Pictures/Desktop/` are removed each run.
+- `rendered/` files are never deleted.
+
+**Why this alone wasn't sufficient:** `WallpaperImageExtension` was rebuilding the 15MB plist from `cfprefsd`'s in-memory cache regardless of the wallpaper source. The real fixes were the `defaults write` cleanup method and `NSWorkspaceDesktopImageAllSpacesKey`.
+
 ### Cache Cleanup Implementation (January 2026)
 
 **Changes Made:**

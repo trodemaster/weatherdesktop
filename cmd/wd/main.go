@@ -400,7 +400,17 @@ func setDesktopWallpaper(imagePath string, method string, clearCache bool) error
 		}
 	}
 
-	if err := desktop.SetWallpaper(imagePath, verbose); err != nil {
+	// Copy image to ~/Pictures/Desktop/ so WallpaperImageExtension only indexes
+	// a single file instead of the entire rendered/ archive (~15K+ images).
+	desktopCopyPath, err := syncDesktopPicturesDir(imagePath, verbose)
+	if err != nil {
+		log.Printf("Desktop: Warning: failed to sync ~/Pictures/Desktop: %v", err)
+		desktopCopyPath = imagePath // fall back to original path
+	} else {
+		log.Printf("Desktop: Using ~/Pictures/Desktop copy: %s", desktopCopyPath)
+	}
+
+	if err := desktop.SetWallpaper(desktopCopyPath, verbose); err != nil {
 		log.Printf("Desktop: ERROR - CGO SetWallpaper failed: %v", err)
 		return err
 	}
@@ -419,6 +429,57 @@ func copyFile(src, dst string) error {
 		return err
 	}
 	return os.WriteFile(dst, input, 0644)
+}
+
+// syncDesktopPicturesDir copies imagePath into ~/Pictures/Desktop/ as a fixed
+// filename "weather-desktop.jpg" so WallpaperAgent always sees the same file
+// path and never accumulates new history entries. Any other .jpg files in that
+// directory are removed. The rendered/ directory is never touched.
+func syncDesktopPicturesDir(imagePath string, verbose bool) (string, error) {
+	homeDir, err := os.UserHomeDir()
+	if err != nil {
+		return "", fmt.Errorf("failed to get home directory: %w", err)
+	}
+
+	destDir := filepath.Join(homeDir, "Pictures", "Desktop")
+	if err := os.MkdirAll(destDir, 0755); err != nil {
+		return "", fmt.Errorf("failed to create ~/Pictures/Desktop: %w", err)
+	}
+
+	// Use a fixed filename so WallpaperAgent records only one persistent path
+	// instead of accumulating a new history entry on every run.
+	const fixedName = "weather-desktop.jpg"
+	destPath := filepath.Join(destDir, fixedName)
+
+	// Remove any other .jpg files that may have been left from earlier runs
+	// that used the timestamped filename scheme.
+	entries, err := os.ReadDir(destDir)
+	if err != nil {
+		return "", fmt.Errorf("failed to read ~/Pictures/Desktop: %w", err)
+	}
+	for _, e := range entries {
+		if e.IsDir() {
+			continue
+		}
+		if strings.EqualFold(filepath.Ext(e.Name()), ".jpg") && e.Name() != fixedName {
+			stale := filepath.Join(destDir, e.Name())
+			if verbose {
+				log.Printf("Desktop: Removing stale desktop image: %s", stale)
+			}
+			if err := os.Remove(stale); err != nil {
+				log.Printf("Desktop: Warning: failed to remove stale image %s: %v", stale, err)
+			}
+		}
+	}
+
+	if verbose {
+		log.Printf("Desktop: Copying %s → %s", imagePath, destPath)
+	}
+	if err := copyFile(imagePath, destPath); err != nil {
+		return "", fmt.Errorf("failed to copy image to ~/Pictures/Desktop: %w", err)
+	}
+
+	return destPath, nil
 }
 
 // sshTargetInfo contains parsed information from SSH_TARGET

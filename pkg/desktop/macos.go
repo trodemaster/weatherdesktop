@@ -6,6 +6,12 @@ package desktop
 #import <Cocoa/Cocoa.h>
 #import <unistd.h>
 
+// NSWorkspaceDesktopImageAllSpacesKey exists in AppKit at runtime but is not
+// declared in the public SDK header. Declaring it here lets us pass it in the
+// options dictionary so the wallpaper is applied to ALL Mission Control spaces
+// on each screen, not just the currently-active space.
+extern NSString * const NSWorkspaceDesktopImageAllSpacesKey;
+
 int setWallpaper(const char* imagePath) {
     @autoreleasepool {
         NSString *path = [NSString stringWithUTF8String:imagePath];
@@ -48,18 +54,14 @@ int setWallpaper(const char* imagePath) {
             NSLog(@"Desktop: Setting wallpaper for screen %lu (frame: %.0f x %.0f @ %.0f, %.0f)",
                   (unsigned long)screenIndex, frame.size.width, frame.size.height, frame.origin.x, frame.origin.y);
 
-            // Get current options for this screen to preserve settings like fill color
-            NSDictionary *currentOptions = [workspace desktopImageOptionsForScreen:screen];
+            // Build options: scale proportionally, apply to ALL Mission Control
+            // spaces on this screen so no space retains a stale rendered/ path.
             NSMutableDictionary *options = [NSMutableDictionary dictionaryWithDictionary:@{
                 NSWorkspaceDesktopImageScalingKey: @(NSImageScaleProportionallyUpOrDown),
-                NSWorkspaceDesktopImageAllowClippingKey: @(YES)
+                NSWorkspaceDesktopImageAllowClippingKey: @(YES),
+                NSWorkspaceDesktopImageAllSpacesKey: @(YES)
             }];
-
-            // Merge current options to preserve per-screen settings
-            if (currentOptions && [currentOptions count] > 0) {
-                [options addEntriesFromDictionary:currentOptions];
-                NSLog(@"Desktop: Merged existing options for screen %lu", (unsigned long)screenIndex);
-            }
+            NSLog(@"Desktop: Applying wallpaper to all spaces on screen %lu", (unsigned long)screenIndex);
 
             NSError *error = nil;
             BOOL success = [workspace setDesktopImageURL:imageURL

@@ -177,35 +177,22 @@ func SetWallpaper(imagePath string, verbose bool) error {
 	return nil
 }
 
-// ClearWallpaperCache clears macOS wallpaper caches and plist entries
-// Includes TMPDIR cache, Container cache, and WallpaperImageExtension plist entries
+// ClearWallpaperCache clears the TMPDIR-based wallpaper cache.
 // verbose enables detailed logging
-// clearContainer controls whether to clear Container cache paths (requires permissions)
+// clearContainer is retained for API compatibility but is now a no-op:
+// ChoiceRequests.ImageFiles plist cleanup is handled by flush_wallpaper_cache.sh
+// running as root (system launchd), which avoids the TCC permission prompt that
+// `defaults write` to another app's domain triggers when called from a user process.
 func ClearWallpaperCache(verbose bool, clearContainer bool) error {
 	if verbose {
-		log.Printf("Desktop: Clearing wallpaper caches...")
+		log.Printf("Desktop: Clearing TMPDIR wallpaper cache...")
 	}
 
-	// Always clear TMPDIR-based cache (doesn't require special permissions)
 	if err := clearTMPDIRCache(verbose); err != nil {
 		if verbose {
 			log.Printf("Desktop: WARNING - Failed to clear TMPDIR cache: %v", err)
 		}
 		// Continue even if this fails
-	}
-
-	// Only clear Container-based cache if explicitly requested (may trigger security prompt)
-	if clearContainer {
-		if err := clearContainerCache(verbose); err != nil {
-			if verbose {
-				log.Printf("Desktop: WARNING - Failed to clear Container cache: %v", err)
-			}
-			// Continue even if this fails
-		}
-	} else {
-		if verbose {
-			log.Printf("Desktop: Skipping Container cache cleanup (use -clear-cache flag to enable)")
-		}
 	}
 
 	if verbose {
@@ -258,36 +245,3 @@ func clearTMPDIRCache(verbose bool) error {
 	return nil
 }
 
-// clearContainerCache clears WallpaperImageExtension plist entries via cfprefsd.
-// Uses `defaults write` which routes through cfprefsd's in-memory cache — the
-// only effective way to clear these entries (rm -f on the plist is ignored by cfprefsd).
-//
-// Note: Deleting files inside ~/Library/Containers/* triggers macOS's App Sandbox
-// permission dialog on every run. The plist entry clearing below is sufficient to
-// prevent the WallpaperAgent hang; the UUID cache JPGs in the extension container
-// are a disk-space concern only and are managed by macOS independently.
-func clearContainerCache(verbose bool) error {
-	// Clear plist entries via defaults write (cfprefsd-aware, no sandbox prompt)
-	if verbose {
-		log.Printf("Desktop: Clearing WallpaperImageExtension plist entries via defaults...")
-	}
-	domain := "com.apple.wallpaper.extension.image"
-	for _, key := range []string{
-		"ChoiceRequests.ImageFiles",
-		"ChoiceRequests.Assets",
-		"ChoiceRequests.CollectionIdentifiers",
-	} {
-		cmd := exec.Command("defaults", "write", domain, key, "-array")
-		if err := cmd.Run(); err != nil {
-			if verbose {
-				log.Printf("Desktop: WARNING - Failed to clear %s: %v", key, err)
-			}
-			// Continue even if this fails
-		}
-	}
-	if verbose {
-		log.Printf("Desktop: Plist entries cleared successfully")
-	}
-
-	return nil
-}

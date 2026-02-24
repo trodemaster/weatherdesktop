@@ -31,12 +31,12 @@ The hang is caused by `WallpaperImageExtension` accumulating a bookmark entry in
 - **Current approach**: Set the wallpaper directly from timestamped `rendered/` files (`hud-YYMMDD-HHMM.jpg`).
 - **Why this is now safe**: With `NSWorkspaceDesktopImageAllSpacesKey` updating all spaces and `defaults write` actually clearing the extension cache, unique paths no longer accumulate indefinitely. Paths build up through the day (~288 entries at 5-minute intervals) but remain well under the 4MB NSUserDefaults limit and are cleared nightly by the launchd flush job.
 
-**2. Apply wallpaper to all Mission Control spaces — `NSWorkspaceDesktopImageAllSpacesKey`**
+**2. `NSWorkspaceDesktopImageAllSpacesKey` — Added then removed**
 
-- `pkg/desktop/macos.go`: Added `extern NSString * const NSWorkspaceDesktopImageAllSpacesKey;` — this symbol exists in AppKit at runtime but is not declared in the public `NSWorkspace.h` header (confirmed via `AppKit.tbd` in the macOS SDK).
-- Set `NSWorkspaceDesktopImageAllSpacesKey: @(YES)` in the options dictionary passed to `setDesktopImageURL:forScreen:options:error:`.
-- This updates **all Mission Control spaces** on each screen simultaneously, eliminating stale `rendered/` path references that persisted in the window server's per-space wallpaper state.
-- Removed the "merge existing screen options" block which could have overwritten this key.
+- `pkg/desktop/macos.go`: Temporarily added `NSWorkspaceDesktopImageAllSpacesKey: @(YES)` to update all Mission Control spaces atomically.
+- **Reverted (Feb 24, 2026)**: This undocumented key causes macOS to write the wallpaper configuration for ALL spaces in the preference database, but does **not** trigger an immediate visual redraw on the currently visible space. WallpaperAgent processes the change lazily (e.g., on space transition), so the desktop appeared frozen between updates.
+- The original `setDesktopImageURL:forScreen:options:error:` call **without** this key updates only the current space's wallpaper and triggers an immediate visual refresh — which is the correct behavior.
+- Stale spaces from other Mission Control spaces are handled by the daily `flush_wallpaper_cache.sh` launchd job instead.
 
 **3. Fixed launchd job path — `Developer/` instead of `code/`**
 
@@ -80,7 +80,7 @@ Searched the macOS SDK (`MacOSX.sdk`) for wallpaper internals:
 | File | Change |
 |---|---|
 | `cmd/wd/main.go` | Removed `syncDesktopPicturesDir()` and fixed filename logic; `setDesktopWallpaper()` now sets directly from timestamped `rendered/` paths |
-| `pkg/desktop/macos.go` | `NSWorkspaceDesktopImageAllSpacesKey: @(YES)` added; merge-existing-options removed |
+| `pkg/desktop/macos.go` | `NSWorkspaceDesktopImageAllSpacesKey` added then removed; standard scaling options used; stale-space cleanup delegated to daily flush job |
 | `flush_wallpaper_cache.sh` | Step 10 replaced `rm -f` with `defaults write` empty arrays via cfprefsd |
 | `machine-cfg/umac/tv.jibb.wd.plist` | `ProgramArguments` and `WorkingDirectory` updated from `code/` → `Developer/` |
 

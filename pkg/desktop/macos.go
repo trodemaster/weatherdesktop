@@ -258,22 +258,16 @@ func clearTMPDIRCache(verbose bool) error {
 	return nil
 }
 
-// clearContainerCache clears Container-based wallpaper cache and plist entries
-// Paths cleared:
-//  1. ~/Library/Containers/com.apple.wallpaper.agent/Data/Library/Caches/com.apple.wallpaper.caches/...
-//  2. ~/Library/Containers/com.apple.wallpaper.extension.image/Data/Library/Caches/
-// Plist entries cleared:
-//  - ChoiceRequests.ImageFiles (and Assets, CollectionIdentifiers) via defaults write
+// clearContainerCache clears WallpaperImageExtension plist entries via cfprefsd.
+// Uses `defaults write` which routes through cfprefsd's in-memory cache — the
+// only effective way to clear these entries (rm -f on the plist is ignored by cfprefsd).
+//
+// Note: Deleting files inside ~/Library/Containers/* triggers macOS's App Sandbox
+// permission dialog on every run. The plist entry clearing below is sufficient to
+// prevent the WallpaperAgent hang; the UUID cache JPGs in the extension container
+// are a disk-space concern only and are managed by macOS independently.
 func clearContainerCache(verbose bool) error {
-	homeDir, err := os.UserHomeDir()
-	if err != nil {
-		if verbose {
-			log.Printf("Desktop: WARNING - Failed to get home directory: %v", err)
-		}
-		return fmt.Errorf("failed to get home directory: %w", err)
-	}
-
-	// Step 1: Clear plist entries via defaults write (cfprefsd-aware)
+	// Clear plist entries via defaults write (cfprefsd-aware, no sandbox prompt)
 	if verbose {
 		log.Printf("Desktop: Clearing WallpaperImageExtension plist entries via defaults...")
 	}
@@ -293,62 +287,6 @@ func clearContainerCache(verbose bool) error {
 	}
 	if verbose {
 		log.Printf("Desktop: Plist entries cleared successfully")
-	}
-
-	// Step 2: Clear wallpaper.agent cache (existing path)
-	cachePath := filepath.Join(homeDir, "Library/Containers/com.apple.wallpaper.agent/Data/Library/Caches/com.apple.wallpaper.caches/extension-com.apple.wallpaper.extension.image")
-
-	if verbose {
-		log.Printf("Desktop: Container cache path: %s", cachePath)
-	}
-
-	// Check if cache directory exists
-	if _, err := os.Stat(cachePath); !os.IsNotExist(err) {
-		if verbose {
-			log.Printf("Desktop: Container cache directory exists, clearing files...")
-		}
-
-		// Remove all files in the cache directory
-		cmd := exec.Command("find", cachePath, "-type", "f", "-delete")
-		if err := cmd.Run(); err != nil {
-			if verbose {
-				log.Printf("Desktop: WARNING - Failed to clear wallpaper.agent cache: %v", err)
-			}
-			// Continue even if this fails
-		}
-		if verbose {
-			log.Printf("Desktop: wallpaper.agent cache cleared successfully")
-		}
-	} else if verbose {
-		log.Printf("Desktop: wallpaper.agent cache directory does not exist, skipping")
-	}
-
-	// Step 3: Clear wallpaper.extension.image cache (UUID-named JPGs)
-	extCachePath := filepath.Join(homeDir, "Library/Containers/com.apple.wallpaper.extension.image/Data/Library/Caches")
-
-	if verbose {
-		log.Printf("Desktop: Extension cache path: %s", extCachePath)
-	}
-
-	// Check if cache directory exists
-	if _, err := os.Stat(extCachePath); !os.IsNotExist(err) {
-		if verbose {
-			log.Printf("Desktop: Extension cache directory exists, clearing files...")
-		}
-
-		// Remove all files (not subdirectories) in the Caches directory
-		cmd := exec.Command("find", extCachePath, "-maxdepth", "1", "-type", "f", "-delete")
-		if err := cmd.Run(); err != nil {
-			if verbose {
-				log.Printf("Desktop: WARNING - Failed to clear extension cache: %v", err)
-			}
-			// Continue even if this fails
-		}
-		if verbose {
-			log.Printf("Desktop: Extension cache cleared successfully")
-		}
-	} else if verbose {
-		log.Printf("Desktop: Extension cache directory does not exist, skipping")
 	}
 
 	return nil

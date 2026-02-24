@@ -49,15 +49,12 @@ The hang is caused by `WallpaperImageExtension` accumulating a bookmark entry in
 - `flush_wallpaper_cache.sh` step 10 now uses `defaults write <domain> "ChoiceRequests.ImageFiles" -array` (and similarly for `ChoiceRequests.Assets` and `ChoiceRequests.CollectionIdentifiers`). Writing through `defaults` updates cfprefsd's cache directly, so the old data is truly gone.
 - **Now a fallback**: As of Feb 24, 2026, this cleanup happens on every `wd` run (see #5 below), so the nightly launchd job is no longer the primary cleanup mechanism.
 
-**5. Per-run plist and cache cleanup (Feb 24, 2026)**
+**5. Per-run plist cleanup (Feb 24, 2026)**
 
-- `pkg/desktop/macos.go` — `clearContainerCache()` now:
-  1. Clears plist entries via `defaults write ChoiceRequests.ImageFiles -array` (and Assets, CollectionIdentifiers).
-  2. Deletes all files from both cache directories:
-     - `~/Library/Containers/com.apple.wallpaper.agent/Data/Library/Caches/...` (old path)
-     - `~/Library/Containers/com.apple.wallpaper.extension.image/Data/Library/Caches/` (UUID-named JPGs)
+- `pkg/desktop/macos.go` — `clearContainerCache()` now clears plist entries via `defaults write ChoiceRequests.ImageFiles -array` (and Assets, CollectionIdentifiers) before each wallpaper set. This routes through `cfprefsd`'s in-memory cache and requires no special permissions.
 - `cmd/wd/main.go` — `setDesktopWallpaper()` now **always** calls `ClearWallpaperCache(verbose, true)` before setting the wallpaper. The `-clear-cache` flag is retained for backward compat but is now a no-op.
-- **Result**: Plist entries stay at **0→1 per run** (no daily accumulation). Cache files stay at **0→1 per run** (freed **22GB** immediately on first run).
+- **Result**: Plist entries stay at **0→1 per run** — the WallpaperAgent hang condition (>4MB plist) can never recur.
+- **Note on cache file deletion**: Deleting UUID-named JPGs from `~/Library/Containers/com.apple.wallpaper.extension.image/Data/Library/Caches/` (22GB) triggers macOS App Sandbox permission prompts on every run. This was reverted. The UUID cache is a disk-space concern only — it does not cause the WallpaperAgent hang — and is managed by macOS independently. The plist clearing alone is sufficient.
 - The nightly `flush_wallpaper_cache.sh` remains as a belt-and-suspenders fallback but is no longer the primary mechanism.
 
 #### SDK Investigation Notes

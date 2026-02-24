@@ -25,13 +25,11 @@ The hang is caused by `WallpaperImageExtension` accumulating a bookmark entry in
 
 #### Fixes Applied
 
-**1. Fixed wallpaper source — `~/Pictures/Desktop/weather-desktop.jpg`**
+**1. ~~Wallpaper source indirection via `~/Pictures/Desktop/`~~ (Reverted Feb 24, 2026)**
 
-- `cmd/wd/main.go`: Added `syncDesktopPicturesDir()` — copies the current rendered image to `~/Pictures/Desktop/weather-desktop.jpg` (fixed filename, file content changes each run).
-- `setDesktopWallpaper()` now sets the wallpaper from this fixed path instead of a timestamped `rendered/` path.
-- Because the path never changes, `WallpaperImageExtension` deduplicates the bookmark and never adds a new entry — the extension plist stops growing entirely.
-- Stale `.jpg` files in `~/Pictures/Desktop/` are cleaned up on each run.
-- `rendered/` files are never deleted (they are needed for video production).
+- ~~Previously copied the rendered image to `~/Pictures/Desktop/weather-desktop.jpg` (fixed filename).~~ This approach was reverted after confirming the root causes were addressed by fixes #2, #3, and #4.
+- **Current approach**: Set the wallpaper directly from timestamped `rendered/` files (`hud-YYMMDD-HHMM.jpg`).
+- **Why this is now safe**: With `NSWorkspaceDesktopImageAllSpacesKey` updating all spaces and `defaults write` actually clearing the extension cache, unique paths no longer accumulate indefinitely. Paths build up through the day (~288 entries at 5-minute intervals) but remain well under the 4MB NSUserDefaults limit and are cleared nightly by the launchd flush job.
 
 **2. Apply wallpaper to all Mission Control spaces — `NSWorkspaceDesktopImageAllSpacesKey`**
 
@@ -72,30 +70,41 @@ Searched the macOS SDK (`MacOSX.sdk`) for wallpaper internals:
 
 #### TODO
 
-- **Consider reverting `~/Pictures/Desktop/` indirection.** Now that `cfprefsd`-aware cleanup works and `NSWorkspaceDesktopImageAllSpacesKey` eliminates stale space references, it may be possible to set the wallpaper directly from `rendered/` again — using a **fixed symlink** (e.g., `rendered/current.jpg → hud-YYMMDD-HHMM.jpg`) so the registered path never changes. This would simplify `syncDesktopPicturesDir()` away entirely. Evaluate after a few days of stability testing with the current approach.
+- ~~**Consider reverting `~/Pictures/Desktop/` indirection.**~~ **Reverted (Feb 24, 2026)** — The `~/Pictures/Desktop/` indirection has been successfully removed. The wallpaper is now set directly from the timestamped `rendered/` files. This is safe because:
+  1. `NSWorkspaceDesktopImageAllSpacesKey: @(YES)` eliminates stale space references, preventing indefinite path accumulation.
+  2. `defaults write` cache clearing actually works, so the daily launchd flush job truly wipes the extension plist.
+  3. Daily path accumulation (~288 entries at 5-min intervals) stays well under the 4MB NSUserDefaults limit.
 
 #### Files Modified
 
 | File | Change |
 |---|---|
-| `cmd/wd/main.go` | `syncDesktopPicturesDir()` with fixed `weather-desktop.jpg` filename; `setDesktopWallpaper()` updated |
+| `cmd/wd/main.go` | Removed `syncDesktopPicturesDir()` and fixed filename logic; `setDesktopWallpaper()` now sets directly from timestamped `rendered/` paths |
 | `pkg/desktop/macos.go` | `NSWorkspaceDesktopImageAllSpacesKey: @(YES)` added; merge-existing-options removed |
 | `flush_wallpaper_cache.sh` | Step 10 replaced `rm -f` with `defaults write` empty arrays via cfprefsd |
 | `machine-cfg/umac/tv.jibb.wd.plist` | `ProgramArguments` and `WorkingDirectory` updated from `code/` → `Developer/` |
 
 ---
 
-### Desktop Pictures Directory Isolation (February 2026)
+### Desktop Pictures Directory Isolation (February 2026) — REVERTED
 
-> **Superseded by the fuller investigation above.** This section captures the initial approach; see "WallpaperAgent Hang — Full Root Cause & Fix" for the complete picture and current state.
+> **Superseded and reverted Feb 24, 2026.** This section documents the earlier (now-removed) approach to isolating wallpaper to a fixed filename in `~/Pictures/Desktop/`. The revert was safe because the actual root causes of the hang were addressed by the other three fixes (#2, #3, #4).
 
-**Initial approach:**
-- Copies the current rendered image to `~/Pictures/Desktop/weather-desktop.jpg` (fixed filename — later revised from the original timestamped approach).
-- `setDesktopWallpaper()` sets the wallpaper from this copy instead of directly from `rendered/`.
-- Stale `.jpg` files in `~/Pictures/Desktop/` are removed each run.
-- `rendered/` files are never deleted.
+**Initial approach (now reverted):**
+- Copied the current rendered image to `~/Pictures/Desktop/weather-desktop.jpg` (fixed filename — later revised from the original timestamped approach).
+- `setDesktopWallpaper()` set the wallpaper from this copy instead of directly from `rendered/`.
+- Stale `.jpg` files in `~/Pictures/Desktop/` were removed each run.
+- `rendered/` files were never deleted.
 
-**Why this alone wasn't sufficient:** `WallpaperImageExtension` was rebuilding the 15MB plist from `cfprefsd`'s in-memory cache regardless of the wallpaper source. The real fixes were the `defaults write` cleanup method and `NSWorkspaceDesktopImageAllSpacesKey`.
+**Why it was effective but unnecessary:** Using a fixed filename prevented `WallpaperImageExtension` from adding new history entries, which would have slowed the plist growth. However, the real problem-solvers were:
+1. **`defaults write` cache cleanup** — actually clears the existing 15MB plist through `cfprefsd`.
+2. **`NSWorkspaceDesktopImageAllSpacesKey`** — eliminates per-space references that would otherwise persist as stale paths.
+3. **Canonical launchd paths** — prevents duplicate `code/` vs `Developer/` entries.
+
+With these three fixes in place, the indirection becomes unnecessary because:
+- New paths no longer accumulate indefinitely (all spaces updated each run).
+- The daily flush actually works, keeping plist size under control.
+- Paths can safely accumulate through the day and be wiped nightly.
 
 ### Cache Cleanup Implementation (January 2026)
 

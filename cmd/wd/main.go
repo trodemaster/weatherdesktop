@@ -375,7 +375,6 @@ func setDesktopWallpaper(imagePath string, method string, clearCache bool) error
 	log.Printf("Desktop: Setting desktop wallpaper")
 	log.Printf("Desktop: Image path: %s", imagePath)
 	log.Printf("Desktop: Method: %s", method)
-	log.Printf("Desktop: Clear Container cache: %v", clearCache)
 	log.Printf("Desktop: Verbose logging: %v", verbose)
 	log.Printf("Desktop: ========================================")
 
@@ -384,20 +383,12 @@ func setDesktopWallpaper(imagePath string, method string, clearCache bool) error
 		return fmt.Errorf("unsupported desktop method: %s (only 'cgo' is supported)", method)
 	}
 
-	// Clear wallpaper cache BEFORE setting new wallpaper (if requested)
-	if clearCache {
-		log.Printf("Desktop: Clearing wallpaper caches before setting new wallpaper...")
-		if err := desktop.ClearWallpaperCache(verbose, true); err != nil {
-			log.Printf("Desktop: Warning: %v", err)
-		}
-	} else {
-		// Only clear TMPDIR cache (doesn't require permissions)
-		if verbose {
-			log.Printf("Desktop: Clearing TMPDIR cache only (use -clear-cache flag for full cleanup)...")
-		}
-		if err := desktop.ClearWallpaperCache(verbose, false); err != nil {
-			log.Printf("Desktop: Warning: %v", err)
-		}
+	// Always clear wallpaper caches BEFORE setting new wallpaper
+	// This includes plist entries and cache files, keeping both at 0→1 per run
+	// (first run clears all; subsequent runs only delete 1 old file)
+	log.Printf("Desktop: Clearing wallpaper caches before setting new wallpaper...")
+	if err := desktop.ClearWallpaperCache(verbose, true); err != nil {
+		log.Printf("Desktop: Warning: %v", err)
 	}
 
 	if err := desktop.SetWallpaper(imagePath, verbose); err != nil {

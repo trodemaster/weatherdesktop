@@ -27,16 +27,15 @@ The hang is caused by `WallpaperImageExtension` accumulating a bookmark entry in
 
 **1. ~~Wallpaper source indirection via `~/Pictures/Desktop/`~~ (Reverted Feb 24, 2026)**
 
-- ~~Previously copied the rendered image to `~/Pictures/Desktop/weather-desktop.jpg` (fixed filename).~~ This approach was reverted after confirming the root causes were addressed by fixes #2, #3, and #4.
+- ~~Previously copied the rendered image to `~/Pictures/Desktop/weather-desktop.jpg` (fixed filename).~~ This approach was reverted after confirming the root causes were addressed by fixes #3, #4, and #5.
 - **Current approach**: Set the wallpaper directly from timestamped `rendered/` files (`hud-YYMMDD-HHMM.jpg`).
-- **Why this is now safe**: With `NSWorkspaceDesktopImageAllSpacesKey` updating all spaces and `defaults write` actually clearing the extension cache, unique paths no longer accumulate indefinitely. Paths build up through the day (~288 entries at 5-minute intervals) but remain well under the 4MB NSUserDefaults limit and are cleared nightly by the launchd flush job.
+- **Why this is now safe**: Plist entries and cache files are now pruned on every `wd` run (before wallpaper set), so they stay at 0→1 and never accumulate.
 
 **2. `NSWorkspaceDesktopImageAllSpacesKey` — Added then removed**
 
 - `pkg/desktop/macos.go`: Temporarily added `NSWorkspaceDesktopImageAllSpacesKey: @(YES)` to update all Mission Control spaces atomically.
 - **Reverted (Feb 24, 2026)**: This undocumented key causes macOS to write the wallpaper configuration for ALL spaces in the preference database, but does **not** trigger an immediate visual redraw on the currently visible space. WallpaperAgent processes the change lazily (e.g., on space transition), so the desktop appeared frozen between updates.
 - The original `setDesktopImageURL:forScreen:options:error:` call **without** this key updates only the current space's wallpaper and triggers an immediate visual refresh — which is the correct behavior.
-- Stale spaces from other Mission Control spaces are handled by the daily `flush_wallpaper_cache.sh` launchd job instead.
 
 **3. Fixed launchd job path — `Developer/` instead of `code/`**
 
@@ -44,11 +43,22 @@ The hang is caused by `WallpaperImageExtension` accumulating a bookmark entry in
 - `code → Developer/` is a symlink, so the binary was identical, but `os.Args[0]` returned the symlink path. This caused `scriptDir` to resolve as `code/...`, so WallpaperAgent recorded all wallpaper paths using the `code/` alias — building up a separate history from the `Developer/` paths.
 - Launchd job reloaded with `launchctl bootout` + `launchctl bootstrap`.
 
-**4. Fixed cache cleanup to use `defaults write` — `flush_wallpaper_cache.sh`**
+**4. Fixed cache cleanup to use `defaults write` — `flush_wallpaper_cache.sh` (now a fallback)**
 
 - Previous cleanup used `rm -f` on the extension plist. **This never worked.** `cfprefsd` holds preferences in an in-memory cache and restores the file immediately on next access, regardless of deletion.
-- New cleanup uses `defaults write <domain> "ChoiceRequests.ImageFiles" -array` (and similarly for `ChoiceRequests.Assets` and `ChoiceRequests.CollectionIdentifiers`). Writing through `defaults` updates cfprefsd's cache directly, so the old data is truly gone.
-- Result: plist drops from ~15MB to ~357 bytes immediately after the flush and stays small. After WallpaperAgent restarts, it registers only `weather-desktop.jpg` — one entry (~1.5KB total).
+- `flush_wallpaper_cache.sh` step 10 now uses `defaults write <domain> "ChoiceRequests.ImageFiles" -array` (and similarly for `ChoiceRequests.Assets` and `ChoiceRequests.CollectionIdentifiers`). Writing through `defaults` updates cfprefsd's cache directly, so the old data is truly gone.
+- **Now a fallback**: As of Feb 24, 2026, this cleanup happens on every `wd` run (see #5 below), so the nightly launchd job is no longer the primary cleanup mechanism.
+
+**5. Per-run plist and cache cleanup (Feb 24, 2026)**
+
+- `pkg/desktop/macos.go` — `clearContainerCache()` now:
+  1. Clears plist entries via `defaults write ChoiceRequests.ImageFiles -array` (and Assets, CollectionIdentifiers).
+  2. Deletes all files from both cache directories:
+     - `~/Library/Containers/com.apple.wallpaper.agent/Data/Library/Caches/...` (old path)
+     - `~/Library/Containers/com.apple.wallpaper.extension.image/Data/Library/Caches/` (UUID-named JPGs)
+- `cmd/wd/main.go` — `setDesktopWallpaper()` now **always** calls `ClearWallpaperCache(verbose, true)` before setting the wallpaper. The `-clear-cache` flag is retained for backward compat but is now a no-op.
+- **Result**: Plist entries stay at **0→1 per run** (no daily accumulation). Cache files stay at **0→1 per run** (freed **22GB** immediately on first run).
+- The nightly `flush_wallpaper_cache.sh` remains as a belt-and-suspenders fallback but is no longer the primary mechanism.
 
 #### SDK Investigation Notes
 
@@ -70,18 +80,16 @@ Searched the macOS SDK (`MacOSX.sdk`) for wallpaper internals:
 
 #### TODO
 
-- ~~**Consider reverting `~/Pictures/Desktop/` indirection.**~~ **Reverted (Feb 24, 2026)** — The `~/Pictures/Desktop/` indirection has been successfully removed. The wallpaper is now set directly from the timestamped `rendered/` files. This is safe because:
-  1. `NSWorkspaceDesktopImageAllSpacesKey: @(YES)` eliminates stale space references, preventing indefinite path accumulation.
-  2. `defaults write` cache clearing actually works, so the daily launchd flush job truly wipes the extension plist.
-  3. Daily path accumulation (~288 entries at 5-min intervals) stays well under the 4MB NSUserDefaults limit.
+- ~~**Consider reverting `~/Pictures/Desktop/` indirection.**~~ **Reverted (Feb 24, 2026)**.
+- ~~**Nightly cleanup via `flush_wallpaper_cache.sh` launchd job.**~~ **Replaced with per-run cleanup (Feb 24, 2026)** — Plist entries and cache files are now cleared before each wallpaper set, keeping both at 0→1 and freeing 22GB immediately. The nightly flush remains as a fallback.
 
 #### Files Modified
 
 | File | Change |
 |---|---|
-| `cmd/wd/main.go` | Removed `syncDesktopPicturesDir()` and fixed filename logic; `setDesktopWallpaper()` now sets directly from timestamped `rendered/` paths |
-| `pkg/desktop/macos.go` | `NSWorkspaceDesktopImageAllSpacesKey` added then removed; standard scaling options used; stale-space cleanup delegated to daily flush job |
-| `flush_wallpaper_cache.sh` | Step 10 replaced `rm -f` with `defaults write` empty arrays via cfprefsd |
+| `cmd/wd/main.go` | Removed `syncDesktopPicturesDir()` and fixed filename logic; `setDesktopWallpaper()` now sets directly from timestamped `rendered/` paths; always calls full cleanup before every wallpaper set |
+| `pkg/desktop/macos.go` | `NSWorkspaceDesktopImageAllSpacesKey` added then removed; `clearContainerCache()` now clears plist entries (via `defaults write`) and both cache directories (0→1 per run) |
+| `flush_wallpaper_cache.sh` | Updated with comment noting step 10 is now a fallback; per-run cleanup is the primary mechanism |
 | `machine-cfg/umac/tv.jibb.wd.plist` | `ProgramArguments` and `WorkingDirectory` updated from `code/` → `Developer/` |
 
 ---

@@ -177,9 +177,10 @@ func SetWallpaper(imagePath string, verbose bool) error {
 	return nil
 }
 
-// ClearWallpaperCache clears macOS wallpaper caches from multiple locations
+// ClearWallpaperCache clears macOS wallpaper caches and plist entries
+// Includes TMPDIR cache, Container cache, and WallpaperImageExtension plist entries
 // verbose enables detailed logging
-// clearContainer controls whether to clear Container cache (requires permissions)
+// clearContainer controls whether to clear Container cache paths (requires permissions)
 func ClearWallpaperCache(verbose bool, clearContainer bool) error {
 	if verbose {
 		log.Printf("Desktop: Clearing wallpaper caches...")
@@ -257,8 +258,12 @@ func clearTMPDIRCache(verbose bool) error {
 	return nil
 }
 
-// clearContainerCache clears Container-based wallpaper cache
-// Path: ~/Library/Containers/com.apple.wallpaper.agent/Data/Library/Caches/com.apple.wallpaper.caches/extension-com.apple.wallpaper.extension.image/
+// clearContainerCache clears Container-based wallpaper cache and plist entries
+// Paths cleared:
+//  1. ~/Library/Containers/com.apple.wallpaper.agent/Data/Library/Caches/com.apple.wallpaper.caches/...
+//  2. ~/Library/Containers/com.apple.wallpaper.extension.image/Data/Library/Caches/
+// Plist entries cleared:
+//  - ChoiceRequests.ImageFiles (and Assets, CollectionIdentifiers) via defaults write
 func clearContainerCache(verbose bool) error {
 	homeDir, err := os.UserHomeDir()
 	if err != nil {
@@ -268,7 +273,29 @@ func clearContainerCache(verbose bool) error {
 		return fmt.Errorf("failed to get home directory: %w", err)
 	}
 
-	// Construct Container cache path
+	// Step 1: Clear plist entries via defaults write (cfprefsd-aware)
+	if verbose {
+		log.Printf("Desktop: Clearing WallpaperImageExtension plist entries via defaults...")
+	}
+	domain := "com.apple.wallpaper.extension.image"
+	for _, key := range []string{
+		"ChoiceRequests.ImageFiles",
+		"ChoiceRequests.Assets",
+		"ChoiceRequests.CollectionIdentifiers",
+	} {
+		cmd := exec.Command("defaults", "write", domain, key, "-array")
+		if err := cmd.Run(); err != nil {
+			if verbose {
+				log.Printf("Desktop: WARNING - Failed to clear %s: %v", key, err)
+			}
+			// Continue even if this fails
+		}
+	}
+	if verbose {
+		log.Printf("Desktop: Plist entries cleared successfully")
+	}
+
+	// Step 2: Clear wallpaper.agent cache (existing path)
 	cachePath := filepath.Join(homeDir, "Library/Containers/com.apple.wallpaper.agent/Data/Library/Caches/com.apple.wallpaper.caches/extension-com.apple.wallpaper.extension.image")
 
 	if verbose {
@@ -276,28 +303,52 @@ func clearContainerCache(verbose bool) error {
 	}
 
 	// Check if cache directory exists
-	if _, err := os.Stat(cachePath); os.IsNotExist(err) {
+	if _, err := os.Stat(cachePath); !os.IsNotExist(err) {
 		if verbose {
-			log.Printf("Desktop: Container cache directory does not exist, skipping")
+			log.Printf("Desktop: Container cache directory exists, clearing files...")
 		}
-		return nil
+
+		// Remove all files in the cache directory
+		cmd := exec.Command("find", cachePath, "-type", "f", "-delete")
+		if err := cmd.Run(); err != nil {
+			if verbose {
+				log.Printf("Desktop: WARNING - Failed to clear wallpaper.agent cache: %v", err)
+			}
+			// Continue even if this fails
+		}
+		if verbose {
+			log.Printf("Desktop: wallpaper.agent cache cleared successfully")
+		}
+	} else if verbose {
+		log.Printf("Desktop: wallpaper.agent cache directory does not exist, skipping")
 	}
+
+	// Step 3: Clear wallpaper.extension.image cache (UUID-named JPGs)
+	extCachePath := filepath.Join(homeDir, "Library/Containers/com.apple.wallpaper.extension.image/Data/Library/Caches")
 
 	if verbose {
-		log.Printf("Desktop: Container cache directory exists, clearing files...")
+		log.Printf("Desktop: Extension cache path: %s", extCachePath)
 	}
 
-	// Remove all files in the cache directory
-	cmd := exec.Command("find", cachePath, "-type", "f", "-delete")
-	if err := cmd.Run(); err != nil {
+	// Check if cache directory exists
+	if _, err := os.Stat(extCachePath); !os.IsNotExist(err) {
 		if verbose {
-			log.Printf("Desktop: WARNING - Failed to clear Container cache: %v", err)
+			log.Printf("Desktop: Extension cache directory exists, clearing files...")
 		}
-		return fmt.Errorf("failed to clear Container cache: %w", err)
-	}
 
-	if verbose {
-		log.Printf("Desktop: Container cache cleared successfully")
+		// Remove all files (not subdirectories) in the Caches directory
+		cmd := exec.Command("find", extCachePath, "-maxdepth", "1", "-type", "f", "-delete")
+		if err := cmd.Run(); err != nil {
+			if verbose {
+				log.Printf("Desktop: WARNING - Failed to clear extension cache: %v", err)
+			}
+			// Continue even if this fails
+		}
+		if verbose {
+			log.Printf("Desktop: Extension cache cleared successfully")
+		}
+	} else if verbose {
+		log.Printf("Desktop: Extension cache directory does not exist, skipping")
 	}
 
 	return nil

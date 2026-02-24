@@ -168,6 +168,9 @@ fi
 # it restarts. WallpaperAgent then only registers the current wallpaper
 # (~/Pictures/Desktop/weather-desktop.jpg), keeping the plist tiny.
 echo "Step 10: Clearing WallpaperImageExtension container cache via cfprefsd..."
+# NOTE: As of Feb 24, 2026, plist clearing happens per-run in the `wd` command
+# (pkg/desktop/macos.go clearContainerCache). This step is now a belt-and-suspenders
+# fallback for backward compatibility or if the per-run cleanup is disabled.
 EXT_DOMAIN="$HOME/Library/Containers/com.apple.wallpaper.extension.image/Data/Library/Preferences/com.apple.wallpaper.extension.image"
 EXT_PLIST_FILE="${EXT_DOMAIN}.plist"
 

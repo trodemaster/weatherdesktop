@@ -19,25 +19,32 @@
     </dict>
 
     <key>StandardOutPath</key>
-    <string>/Library/Logs/weatherdesktop_cacheflush.log</string>
+    <string>/Users/blake/Library/Logs/weatherdesktop_cacheflush.log</string>
 
     <key>StandardErrorPath</key>
-    <string>/Library/Logs/weatherdesktop_cacheflush.log</string>
+    <string>/Users/blake/Library/Logs/weatherdesktop_cacheflush.log</string>
 
     <key>RunAtLoad</key>
     <false/>
 </dict>
 </plist>
 <!--
-# Install as system agent (requires sudo)
-sudo cp /Users/blake/Developer/weatherdesktop/tv.jibb.weatherdesktop.cacheflush.plist /Library/LaunchAgents/
+# Install as user LaunchAgent (no sudo needed)
+cp /Users/blake/Developer/weatherdesktop/tv.jibb.weatherdesktop.cacheflush.plist ~/Library/LaunchAgents/
 
-# Load in system context
-sudo launchctl bootstrap system /Library/LaunchAgents/tv.jibb.weatherdesktop.cacheflush.plist
+# Load into user session
+launchctl bootstrap gui/$(id -u) ~/Library/LaunchAgents/tv.jibb.weatherdesktop.cacheflush.plist
 
 # Check status
-sudo launchctl print system/tv.jibb.weatherdesktop.cacheflush
+launchctl print gui/$(id -u)/tv.jibb.weatherdesktop.cacheflush
+
+# Test run immediately
+launchctl kickstart gui/$(id -u)/tv.jibb.weatherdesktop.cacheflush
 
 # Unload
+launchctl bootout gui/$(id -u) ~/Library/LaunchAgents/tv.jibb.weatherdesktop.cacheflush
+
+# Remove old system daemon if previously installed
 sudo launchctl bootout system/tv.jibb.weatherdesktop.cacheflush
+sudo rm /Library/LaunchDaemons/tv.jibb.weatherdesktop.cacheflush.plist
 -->

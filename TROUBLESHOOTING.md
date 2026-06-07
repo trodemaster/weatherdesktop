@@ -119,15 +119,28 @@ Comprehensive cleanup script that runs these steps:
 5. **Clear Spaces History**: Remove Mission Control historical spaces data
 6. **Reset Agent State**: Clear wallpaper agent's internal Data directory
 
-### Daily LaunchD Job
+### Daily LaunchAgent Job
 **File:** `tv.jibb.weatherdesktop.cacheflush.plist`
 
-System launchd job that runs the cache flush script every 4 hours to prevent accumulation:
+User LaunchAgent (not a system LaunchDaemon) that runs the cache flush script nightly at 01:00.
+Must be a LaunchAgent so it runs inside the user's GUI session (`gui/501`) — required for
+`defaults write` to reach the user's cfprefsd instance.
 
 ```xml
-<key>StartInterval</key>
-<integer>14400</integer>  <!-- 4 hours -->
+<key>StartCalendarInterval</key>
+<dict>
+    <key>Hour</key><integer>1</integer>
+    <key>Minute</key><integer>0</integer>
+</dict>
 ```
+
+Install to `~/Library/LaunchAgents/` (no sudo needed):
+```bash
+cp tv.jibb.weatherdesktop.cacheflush.plist ~/Library/LaunchAgents/
+launchctl bootstrap gui/$(id -u) ~/Library/LaunchAgents/tv.jibb.weatherdesktop.cacheflush.plist
+```
+
+Log: `~/Library/Logs/weatherdesktop_cacheflush.log`
 
 ### Key Findings & Fixes
 
@@ -262,9 +275,9 @@ Weather desktop must either:
 - Migration errors during cleanup process (expected)
 - Missing system wallpaper directories (non-critical)
 
-**LaunchD Integration:**
-- Runs every 4 hours automatically
-- Logs to `/Library/Logs/weatherdesktop_cacheflush.log`
+**LaunchAgent Integration:**
+- Runs nightly at 01:00 as user LaunchAgent (`gui/501`)
+- Logs to `~/Library/Logs/weatherdesktop_cacheflush.log`
 - No user interaction required
 
 **Current Status (Post-Cleanup):**
@@ -320,10 +333,87 @@ sudo killall WallpaperAgent  # If needed
 3. **Process Management**: Terminates conflicting processes safely
 4. **Space Management**: Clears historical Mission Control spaces
 
+## Disk Accumulation: BMP and JPG Cache Files
+
+Beyond the ChoiceRequests plist issue, two additional cache directories accumulate to hundreds of
+GB if not cleaned regularly. Both are now handled by the nightly flush script.
+
+### BMP Rendered Frames — `com.apple.wallpaper.agent`
+- **Path:** `~/Library/Containers/com.apple.wallpaper.agent/Data/Library/Caches/com.apple.wallpaper.caches/extension-com.apple.wallpaper.extension.image/`
+- **Files:** 25 MB BMPs — one rendered wallpaper frame per weather update cycle
+- **Scale observed:** 15,327 files → **353 GB** before first cleanup (May 2026)
+- **Growth rate:** ~3.5 GB/day
+- **Safe to delete:** Yes — macOS regenerates on demand
+- **Cleanup:** `find ... -name "*.bmp" -delete` (Step 4 of flush script)
+
+### JPG Image Cache — `var/folders`
+- **Path:** `$(getconf DARWIN_USER_CACHE_DIR)/com.apple.wallpaper.extension.image/`
+  (e.g. `/private/var/folders/rb/_wjy90zx33b8lv1vp_cfcc180000gn/C/com.apple.wallpaper.extension.image/`)
+- **Files:** ~2 MB UUID-named JPGs — compressed wallpaper thumbnails/cache
+- **Scale observed:** 12,666 files → **22 GB** going back to November 2025
+- **Safe to delete:** Yes — macOS regenerates on demand
+- **Cleanup:** `find ... -name "*.jpg" -delete` (Step 3 of flush script)
+
+A second JPG cache at `~/Library/Containers/com.apple.wallpaper.extension.image/Data/Library/Caches`
+holds only the current day's files (~150 files, ~300 MB) and is also flushed nightly (Step 2).
+
+---
+
+## `defaults write` Blocked by macOS Sequoia Sandbox (Jan 2026)
+
+### Problem
+Since approximately January 4, 2026 (likely a macOS Sequoia update), all external `defaults write`
+calls to the `com.apple.wallpaper.extension.image` preference domain fail with:
+
+```
+Could not write domain /Users/blake/Library/Containers/com.apple.wallpaper.extension.image/
+Data/Library/Preferences/com.apple.wallpaper.extension.image; exiting
+```
+
+This breaks the ChoiceRequests cleanup (Step 1 of flush script) which is needed to prevent
+WallpaperAgent hangs.
+
+### Root Cause
+A 0-byte sentinel file exists at:
+```
+~/Library/Containers/com.apple.wallpaper.extension.image/Data/Library/Preferences/
+com.apple.wallpaper.extension.image.plist.blocked
+```
+
+cfprefsd reads this at startup and enforces a write block on the domain for all external processes.
+The file carries a `com.apple.provenance` extended attribute — a kernel-level security tag that
+**prevents deletion even by the file owner**. `rm` returns "Operation not permitted".
+
+### Approaches Tried (All Failed)
+1. **`sudo -u blake defaults write` from LaunchDaemon (system context)** — fails silently; wrong bootstrap namespace
+2. **`launchctl asuser <uid> sudo -u blake defaults write` from LaunchDaemon** — fails at 1 AM; display sleep means no active user session to attach to
+3. **`defaults write` from LaunchAgent (user session `gui/501`)** — fails; cfprefsd enforces `.blocked` regardless of session context
+4. **Delete the `.blocked` file** — blocked by kernel (`com.apple.provenance` xattr); cannot be removed without disabling SIP
+5. **TCC/privacy settings research** — no documented Apple mechanism to grant external write access to a blocked sandboxed preference domain
+6. **`com.apple.security.temporary-exception.shared-preference.read-write` entitlement** — requires a signed native binary; a shell script cannot carry entitlements; also unclear if it overrides `.blocked`
+
+### Current Status
+**ChoiceRequests cleanup is non-functional.** The 12K+ bookmark entries accumulate in the
+`com.apple.wallpaper.extension.image.plist` without being cleared, and the plist size grows
+until WallpaperAgent hangs again.
+
+The nightly file deletion (Steps 2–4) still works and prevents disk exhaustion.
+
+### Potential Paths Forward
+1. **Signed helper binary** — build a small native tool with the `read-write` shared-preference
+   entitlement; unclear if this overrides `.blocked` but worth testing
+2. **Upstream fix in weather desktop** — the real fix per TROUBLESHOOTING.md: move the `rendered/`
+   directory to a location WallpaperImageExtension cannot scan, preventing bookmark accumulation entirely
+3. **`killall WallpaperImageExtension`** — killing the extension process forces cfprefsd to drop
+   its in-memory preference cache; combined with direct plist truncation this might work as a
+   short-term manual fix (untested)
+
+---
+
 ## Files Modified
 
-1. `flush_wallpaper_cache.sh` - New comprehensive cache cleanup script
-2. `tv.jibb.weatherdesktop.cacheflush.plist` - LaunchD configuration
+1. `flush_wallpaper_cache.sh` - Cache cleanup script (LaunchAgent, 4 steps)
+2. `tv.jibb.weatherdesktop.cacheflush.plist` - LaunchAgent configuration (was LaunchDaemon)
 3. `TROUBLESHOOTING.md` - This documentation
 
 ## System Log Analysis
@@ -351,11 +441,14 @@ To test the fix:
 # Manual test
 ./flush_wallpaper_cache.sh
 
-# Check launchd status
-sudo launchctl print system/tv.jibb.weatherdesktop.cacheflush
+# Check LaunchAgent status
+launchctl print gui/$(id -u)/tv.jibb.weatherdesktop.cacheflush
+
+# Trigger immediate run
+launchctl kickstart gui/$(id -u)/tv.jibb.weatherdesktop.cacheflush
 
 # Monitor logs
-tail -f /Library/Logs/weatherdesktop_cacheflush.log
+tail -f ~/Library/Logs/weatherdesktop_cacheflush.log
 
 # Check system logs for WallpaperAgent errors
 log show --predicate 'process contains "Wallpaper"' --last 1m

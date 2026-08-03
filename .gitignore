@@ -5,6 +5,7 @@ scrape/.venv_scrape
 **/*.jpg
 wd
 wd-worker
+/cacheflush
 **/*.html
 *.psd
 .env

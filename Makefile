@@ -36,12 +36,23 @@ build:
 	CGO_ENABLED=1 GOOS=$(GOOS) GOARCH=$(GOARCH) go build $(BUILD_FLAGS) -o $(BUILD_DIR)/$(BINARY_NAME) ./cmd/wd
 	@echo "✓ Built: $(BUILD_DIR)/$(BINARY_NAME)"
 
+# Build the nightly cache-flush LaunchAgent binary.
+# GOWORK=off: this repo's go.mod is standalone and should not be pulled into the
+# ~/Developer go.work workspace.
+.PHONY: cacheflush
+cacheflush:
+	@echo "Building cacheflush..."
+	GOWORK=off CGO_ENABLED=0 GOOS=$(GOOS) GOARCH=$(GOARCH) go build $(BUILD_FLAGS) -o $(BUILD_DIR)/cacheflush ./cmd/cacheflush
+	@echo "✓ Built: $(BUILD_DIR)/cacheflush"
+	@echo "  Grant Full Disk Access to this binary in System Settings > Privacy & Security"
+	@echo "  after installing/updating the LaunchAgent — see TROUBLESHOOTING.md."
+
 # Clean build artifacts
 # Note: Does NOT delete rendered/*.jpg files (they are archived images)
 .PHONY: clean
 clean:
 	@echo "Cleaning..."
-	@rm -f $(BUILD_DIR)/$(BINARY_NAME)
+	@rm -f $(BUILD_DIR)/$(BINARY_NAME) $(BUILD_DIR)/cacheflush
 	@rm -rf assets/*.png assets/*.jpg assets/*.html
 	@echo "✓ Cleaned (rendered images preserved)"
 
@@ -145,6 +156,7 @@ help:
 	@echo "Build targets:"
 	@echo "  make rebuild       - Rebuild everything (Docker + host binary)"
 	@echo "  make build         - Build host binary (requires CGO)"
+	@echo "  make cacheflush    - Build nightly cache-flush LaunchAgent binary"
 	@echo "  make clean         - Remove build artifacts"
 	@echo "  make deps          - Install/update Go dependencies"
 	@echo ""

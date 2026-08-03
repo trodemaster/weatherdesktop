@@ -408,9 +408,72 @@ defaults write "${EXT_DOMAIN}" "ChoiceRequests.ImageFiles" -array
 
 ---
 
+## Nightly Job Firing But Not Cleaning: TCC / Full Disk Access Gap (Aug 2026) — RESOLVED
+
+### Problem
+The LaunchAgent was firing correctly every night (`launchctl print` showed `runs` incrementing,
+`last exit code = 0`, and the log showed start/complete timestamps) but was silently accomplishing
+nothing:
+
+- Every `defaults write` call failed (`✗ Failed to clear ChoiceRequests.ImageFiles`)
+- Steps 2-4 reported **0 files found** in directories that actually held gigabytes of cache
+  (Containers cache: 2293 files / 4.5G; BMP cache: 2342 files / 54G)
+
+The `.plist.blocked` sentinel documented above was not present at the time — this is a distinct
+failure mode from the one already fixed.
+
+### Root Cause
+launchd-spawned processes have no path to inherit Full Disk Access. An interactive Terminal
+session (or any app) granted Full Disk Access in System Settings can read/write into other apps'
+sandboxed `~/Library/Containers/.../Data` directories and clear their preference domains via
+cfprefsd. A LaunchAgent's process tree terminates at launchd, which carries no such grant — so
+`find`, `du`, and `defaults write` all fail (or silently return empty) when run from the agent,
+regardless of the `.plist.blocked` state.
+
+Confirmed by running the identical script both ways:
+
+| | via `launchctl kickstart` | interactive shell |
+|---|---|---|
+| `defaults write` | fails | succeeds |
+| Containers cache dir listing | 0 files, blank size | 2293 files, 4.5G |
+| BMP cache dir listing | 0 files, blank size | 2342 files, 54G |
+
+### Fix
+Replace the bash script with a dedicated compiled Go binary (`cmd/cacheflush`) and grant Full
+Disk Access to **that one binary only** — not to `/bin/bash`, which every script on the system
+shares and would be a far broader grant than this problem needs.
+
+- `cmd/cacheflush/main.go` — reimplements the four cleanup steps natively. File deletion uses
+  `os.ReadDir`/`os.Remove` directly (no `find`/`du` subprocesses) so file access is checked
+  against this binary's own TCC grant rather than depending on subprocess attribution.
+- `make cacheflush` builds it. Uses `GOWORK=off` because this repo's `go.mod` is standalone and
+  should not be pulled into the `~/Developer` go.work workspace.
+- `tv.jibb.weatherdesktop.cacheflush.plist` now points `ProgramArguments` at the compiled
+  `cacheflush` binary instead of `flush_wallpaper_cache.sh`.
+- `flush_wallpaper_cache.sh` has been removed, superseded by the Go binary.
+
+### To install/update
+```bash
+make cacheflush
+cp tv.jibb.weatherdesktop.cacheflush.plist ~/Library/LaunchAgents/
+launchctl bootout gui/$(id -u) ~/Library/LaunchAgents/tv.jibb.weatherdesktop.cacheflush.plist
+launchctl bootstrap gui/$(id -u) ~/Library/LaunchAgents/tv.jibb.weatherdesktop.cacheflush.plist
+```
+
+Then grant Full Disk Access to `/Users/blake/Developer/weatherdesktop/cacheflush` in
+System Settings → Privacy & Security → Full Disk Access (⌘⇧G in the file picker to type the
+path directly, since `cacheflush` isn't a `.app`).
+
+**Note:** the binary is ad-hoc signed (no paid Apple Developer ID available on this machine).
+Rebuilding it changes its code hash, which may invalidate the Full Disk Access grant — if the
+job silently stops working again after a `make cacheflush` rebuild, re-check this first before
+re-investigating from scratch.
+
+---
+
 ## Files Modified
 
-1. `flush_wallpaper_cache.sh` - Cache cleanup script (LaunchAgent, 4 steps)
+1. `cmd/cacheflush/main.go` - Cache cleanup binary (LaunchAgent, replaces `flush_wallpaper_cache.sh`)
 2. `tv.jibb.weatherdesktop.cacheflush.plist` - LaunchAgent configuration (was LaunchDaemon)
 3. `TROUBLESHOOTING.md` - This documentation
 

@@ -7,9 +7,9 @@ services:
     environment:
       - TZ=America/Los_Angeles
     volumes:
-      - /Users/blake/Developer/weatherdesktop/assets:/app/assets
-      - /Users/blake/Developer/weatherdesktop/rendered:/app/rendered
-      - /Users/blake/Developer/weatherdesktop/graphics:/app/graphics
+      - ./assets:/app/assets
+      - ./rendered:/app/rendered
+      - ./graphics:/app/graphics
     working_dir: /app
     init: true
     restart: unless-stopped

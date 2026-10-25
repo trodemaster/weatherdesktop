@@ -2,13 +2,16 @@ FROM ubuntu:24.04
 
 WORKDIR /app
 
+# Set by BuildKit: arm64 on umac, amd64 on darkstar
+ARG TARGETARCH
+
 # Install Go and system dependencies
 RUN apt update && apt install -y \
     wget \
     ca-certificates \
-    && wget -q https://go.dev/dl/go1.23.3.linux-arm64.tar.gz \
-    && tar -C /usr/local -xzf go1.23.3.linux-arm64.tar.gz \
-    && rm go1.23.3.linux-arm64.tar.gz \
+    && wget -q https://go.dev/dl/go1.23.3.linux-${TARGETARCH}.tar.gz \
+    && tar -C /usr/local -xzf go1.23.3.linux-${TARGETARCH}.tar.gz \
+    && rm go1.23.3.linux-${TARGETARCH}.tar.gz \
     && apt clean \
     && rm -rf /var/lib/apt/lists/*
 

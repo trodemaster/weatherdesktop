@@ -11,3 +11,4 @@ wd-worker
 .env
 .envrc
 assets/*
+!graphics/*.png

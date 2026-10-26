@@ -30,7 +30,7 @@ RUN go mod download
 
 # Install Playwright and WebKit browser with all dependencies
 # The --with-deps flag will install all required system packages
-RUN go run github.com/playwright-community/playwright-go/cmd/playwright@v0.5200.1 install --with-deps webkit
+RUN go run github.com/mxschmitt/playwright-go/cmd/playwright@v0.6201.1 install --with-deps webkit
 
 # Refresh CA certificates to ensure all trusted certificates are available
 RUN update-ca-certificates

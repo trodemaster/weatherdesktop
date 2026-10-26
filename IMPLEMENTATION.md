@@ -353,7 +353,7 @@ ENV PATH=$PATH:/usr/local/go/bin
 WORKDIR /app
 
 # Install Playwright and WebKit
-RUN go run github.com/playwright-community/playwright-go/cmd/playwright@latest install --with-deps webkit
+RUN go run github.com/mxschmitt/playwright-go/cmd/playwright@latest install --with-deps webkit
 
 # Install CA certificates for TLS
 RUN update-ca-certificates && \
@@ -756,7 +756,7 @@ xcode-select --install
 - CGO - macOS Cocoa APIs
 
 ### Container (`cmd/wd-worker`)
-- `github.com/playwright-community/playwright-go` - Browser automation
+- `github.com/mxschmitt/playwright-go` - Browser automation
 - WebKit browser binaries (installed in Docker image)
 - Standard library packages for image processing
 
@@ -797,4 +797,4 @@ xcode-select --install
 
 - [README.md](README.md) - User documentation
 - [Docker Compose v2 Documentation](https://docs.docker.com/compose/)
-- [Playwright-Go Documentation](https://pkg.go.dev/github.com/playwright-community/playwright-go)
+- [Playwright-Go Documentation](https://pkg.go.dev/github.com/mxschmitt/playwright-go)

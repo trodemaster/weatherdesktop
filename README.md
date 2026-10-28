@@ -15,6 +15,31 @@ make build
 ./wd
 ```
 
+## Client Mode (macOS hosts)
+
+Rendering runs on darkstar and is published at `https://winter.jibb.tv` (see
+`machine-cfg/darkstar/winter/README.md`). macOS hosts only fetch the image and set
+it as the wallpaper, so they need no Docker:
+
+```bash
+make build cacheflush
+./wd -fetch https://winter.jibb.tv
+```
+
+`-fetch` reads `latest.json` and does nothing if that image is already in
+`rendered/`. Otherwise it downloads the image, sets it, and keeps the newest 3.
+If the server can't be reached, it keeps the current wallpaper and exits 0.
+
+Two LaunchAgents per host:
+
+| Job | Plist | What |
+|---|---|---|
+| `tv.jibb.wd` | `machine-cfg/<host>/tv.jibb.wd.plist` | `wd -fetch` every 5 min (one minute after each render), at login, and once after wake |
+| `tv.jibb.weatherdesktop.cacheflush` | `tv.jibb.weatherdesktop.cacheflush.plist` (this repo) | nightly wallpaper-cache cleanup; `cacheflush` needs Full Disk Access (see TROUBLESHOOTING.md) |
+
+Each image has a unique name, so the cacheflush job is still needed; see
+IMPLEMENTATION.md for the WallpaperAgent hang it prevents.
+
 ## Prerequisites
 
 - **macOS** - Required for desktop wallpaper setting

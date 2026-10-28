@@ -3,8 +3,8 @@ scrape/.venv_scrape
 .venv_scrape
 *.png
 **/*.jpg
-wd
-wd-worker
+/wd
+/wd-worker
 /cacheflush
 **/*.html
 *.psd

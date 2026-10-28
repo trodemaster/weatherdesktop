@@ -34,7 +34,7 @@ Two LaunchAgents per host:
 
 | Job | Plist | What |
 |---|---|---|
-| `tv.jibb.wd` | `machine-cfg/<host>/tv.jibb.wd.plist` | `wd -fetch` every 5 min (one minute after each render), at login, and once after wake |
+| `tv.jibb.wd` | `machine-cfg/<host>/tv.jibb.wd.plist` | `wd -fetch` at :x4 and :x9 of each hour (renders start at :x0/:x5 and take about 3 minutes), at login, and once after wake |
 | `tv.jibb.weatherdesktop.cacheflush` | `tv.jibb.weatherdesktop.cacheflush.plist` (this repo) | nightly wallpaper-cache cleanup; `cacheflush` needs Full Disk Access (see TROUBLESHOOTING.md) |
 
 Each image has a unique name, so the cacheflush job is still needed; see

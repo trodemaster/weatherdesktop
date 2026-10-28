@@ -27,7 +27,7 @@ make build cacheflush
 ```
 
 `-fetch` reads `latest.json` and does nothing if that image is already in
-`rendered/`. Otherwise it downloads the image, sets it, and keeps the newest 3.
+`rendered/`. Otherwise it downloads the image and sets it. Nothing is ever deleted from `rendered/`, so the full history stays available for movies.
 If the server can't be reached, it keeps the current wallpaper and exits 0.
 
 Two LaunchAgents per host:

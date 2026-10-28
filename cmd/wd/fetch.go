@@ -10,14 +10,9 @@ import (
 	"path"
 	"path/filepath"
 	"regexp"
-	"sort"
 	"strings"
 	"time"
 )
-
-// fetchKeep is how many fetched images stay in rendered/ (the current one plus a
-// couple of fallbacks).
-const fetchKeep = 3
 
 // winterImagePath matches the image field of latest.json. The name becomes a local
 // filename, so anything else is rejected.
@@ -35,7 +30,8 @@ type winterLatest struct {
 // filename doubles as the cache key.
 //
 // A server that can't be reached is not an error: the current wallpaper stays and the
-// next run tries again. Only a failed wallpaper set returns an error.
+// next run tries again. Only a failed wallpaper set returns an error. Downloaded
+// images accumulate in rendered/ and are never deleted (they are kept for making movies).
 func fetchFromServer(baseURL string, scriptDir string) error {
 	baseURL = strings.TrimSuffix(baseURL, "/")
 	client := &http.Client{Timeout: 60 * time.Second}
@@ -71,8 +67,6 @@ func fetchFromServer(baseURL string, scriptDir string) error {
 		return err
 	}
 	log.Println("✓ Desktop wallpaper set successfully on all screens")
-
-	pruneRendered(renderedDir, fetchKeep)
 	return nil
 }
 
@@ -150,21 +144,4 @@ func downloadImage(client *http.Client, url string, dest string) error {
 		log.Printf("Fetch: Wrote %s (%d bytes)", dest, n)
 	}
 	return nil
-}
-
-// pruneRendered keeps the newest keep hud-*.jpg files. hud-YYMMDD-HHMM names sort
-// chronologically, so name order is age order.
-func pruneRendered(renderedDir string, keep int) {
-	files, err := filepath.Glob(filepath.Join(renderedDir, "hud-*.jpg"))
-	if err != nil || len(files) <= keep {
-		return
-	}
-	sort.Sort(sort.Reverse(sort.StringSlice(files)))
-	for _, file := range files[keep:] {
-		if err := os.Remove(file); err != nil {
-			log.Printf("Fetch: Warning: Failed to remove %s: %v", file, err)
-		} else if *debugFlag {
-			log.Printf("Fetch: Removed old image %s", file)
-		}
-	}
 }

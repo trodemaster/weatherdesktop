@@ -2,11 +2,13 @@ package docker
 
 import (
 	"bytes"
+	"context"
 	"encoding/json"
 	"fmt"
 	"os"
 	"os/exec"
 	"strings"
+	"time"
 )
 
 // Client handles Docker Compose operations
@@ -21,8 +23,41 @@ func New(projectDir string) *Client {
 	}
 }
 
+// waitForDaemon polls the Docker daemon until it responds or the timeout expires.
+// Each probe uses a 5s context so a hung daemon doesn't stall the loop.
+func (c *Client) waitForDaemon(timeout time.Duration) error {
+	deadline := time.Now().Add(timeout)
+	interval := 10 * time.Second
+
+	fmt.Printf("Waiting for Docker daemon (timeout: %s)...\n", timeout)
+
+	for {
+		ctx, cancel := context.WithTimeout(context.Background(), 5*time.Second)
+		err := exec.CommandContext(ctx, "docker", "info").Run()
+		cancel()
+
+		if err == nil {
+			fmt.Println("Docker daemon ready")
+			return nil
+		}
+
+		remaining := time.Until(deadline)
+		if remaining <= interval {
+			return fmt.Errorf("Docker daemon not available after %s", timeout)
+		}
+
+		elapsed := timeout - remaining
+		fmt.Printf("Docker not ready, retrying in %s... (%s elapsed)\n", interval, elapsed.Round(time.Second))
+		time.Sleep(interval)
+	}
+}
+
 // EnsureRunning ensures the wd-worker container is running and healthy
 func (c *Client) EnsureRunning() error {
+	if err := c.waitForDaemon(4 * time.Minute); err != nil {
+		return err
+	}
+
 	// Check if container exists and is running
 	cmd := exec.Command("docker", "compose", "ps", "--format", "json", "wd-worker")
 	cmd.Dir = c.projectDir

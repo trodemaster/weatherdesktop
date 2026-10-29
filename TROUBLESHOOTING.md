@@ -471,6 +471,22 @@ re-investigating from scratch.
 
 ---
 
+## Cacheflush Failing Again After Rebuild: Full Disk Access Grant Lost (Oct 2026) — RESOLVED
+
+The 2026-10-28 01:00 run on far-star exited 0 but did nothing: every `defaults write` failed with
+`Could not write domain ...`, and both cache dirs logged `operation not permitted`. Same
+symptoms as the Aug 2026 entry above. `cacheflush` had been rebuilt on 2026-10-27 (ad-hoc
+signed, so the code hash changed), which invalidates the Full Disk Access grant.
+
+Fix: remove the stale `cacheflush` entry and re-add `/Users/blake/Developer/weatherdesktop/cacheflush`
+in System Settings → Privacy & Security → Full Disk Access (⌘⇧G in the picker), then verify with
+`launchctl kickstart gui/$(id -u)/tv.jibb.weatherdesktop.cacheflush` and check
+`~/Library/Logs/weatherdesktop_cacheflush.log` for deleted files instead of `not accessible`.
+Verified on far-star 2026-10-28 18:30: the kickstart run cleared the ChoiceRequests entries and
+deleted 259 Containers jpgs (428.5MiB) and 266 BMPs (6.2GiB). Repeat after every `make cacheflush`. The `make build` / `wd` binary needs no grant.
+
+---
+
 ## Files Modified
 
 1. `cmd/cacheflush/main.go` - Cache cleanup binary (LaunchAgent, replaces `flush_wallpaper_cache.sh`)

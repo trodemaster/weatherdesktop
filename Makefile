@@ -33,7 +33,7 @@ rebuild:
 .PHONY: build
 build:
 	@echo "Building for $(GOOS)/$(GOARCH)..."
-	CGO_ENABLED=1 GOOS=$(GOOS) GOARCH=$(GOARCH) go build $(BUILD_FLAGS) -o $(BUILD_DIR)/$(BINARY_NAME) ./cmd/wd
+	GOWORK=off CGO_ENABLED=1 GOOS=$(GOOS) GOARCH=$(GOARCH) go build $(BUILD_FLAGS) -o $(BUILD_DIR)/$(BINARY_NAME) ./cmd/wd
 	@echo "✓ Built: $(BUILD_DIR)/$(BINARY_NAME)"
 
 # Build the nightly cache-flush LaunchAgent binary.
